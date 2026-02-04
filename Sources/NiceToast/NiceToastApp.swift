@@ -52,7 +52,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             item.isEnabled = false
             menu.addItem(item)
         } else {
-            for instance in instances {
+            // Sort by space number ascending
+            let sorted = instances.sorted { a, b in
+                let spaceA = spaceNumbers[a.id] ?? Int.max
+                let spaceB = spaceNumbers[b.id] ?? Int.max
+                return spaceA < spaceB
+            }
+            for instance in sorted {
                 let spaceLabel = spaceNumbers[instance.id].map { "[\($0)] " } ?? ""
                 let title = "\(statusIcon(instance.status)) \(spaceLabel)\(instance.displayPath)"
                 let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
@@ -73,11 +79,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func statusIcon(_ status: ClaudeInstance.Status) -> String {
         switch status {
         case .working:
-            return "🟠"
-        case .waiting:
             return "🟢"
+        case .waiting:
+            return "🟠"
         case .idle:
-            return "⚪"
+            return "🔵"
         }
     }
 

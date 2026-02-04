@@ -59,11 +59,11 @@ struct InstanceRow: View {
     private func colorForStatus(_ status: ClaudeInstance.Status) -> Color {
         switch status {
         case .working:
-            return .orange
-        case .waiting:
             return .green
+        case .waiting:
+            return .orange
         case .idle:
-            return .gray
+            return .blue
         }
     }
 
@@ -179,10 +179,10 @@ private func drawCenteredText(_ text: String, in rect: NSRect, color: NSColor) {
 private func nsColorForStatus(_ status: ClaudeInstance.Status) -> NSColor {
     switch status {
     case .working:
-        return NSColor.orange
-    case .waiting:
         return NSColor.systemGreen
+    case .waiting:
+        return NSColor.systemOrange
     case .idle:
-        return NSColor.gray
+        return NSColor.systemBlue
     }
 }
