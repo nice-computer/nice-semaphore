@@ -39,6 +39,11 @@ HOOKS_CONFIG=$(cat << 'EOF'
 EOF
 )
 
+# Backup existing settings file before modifying
+BACKUP_FILE="$SETTINGS_FILE.backup.$(date +%Y%m%d_%H%M%S)"
+cp "$SETTINGS_FILE" "$BACKUP_FILE"
+echo "✓ Backed up settings to $BACKUP_FILE"
+
 # Merge hooks into existing settings
 # This preserves existing settings and merges the hooks section
 CURRENT_SETTINGS=$(cat "$SETTINGS_FILE")
@@ -82,4 +87,5 @@ echo "  - SessionEnd: Removes instance from tracking"
 echo ""
 echo "Status is written to: $STATUS_FILE"
 echo ""
+echo "Backup saved to: $BACKUP_FILE"
 echo "To uninstall, remove the hooks from $SETTINGS_FILE"

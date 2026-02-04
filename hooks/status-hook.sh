@@ -21,6 +21,10 @@ fi
 # Get current timestamp in ISO 8601 format
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+# Get terminal app PID (great-grandparent: hook -> claude -> shell -> terminal app)
+SHELL_PID=$(ps -o ppid= -p "$PPID" | tr -d ' ')
+TERMINAL_PID=$(ps -o ppid= -p "$SHELL_PID" 2>/dev/null | tr -d ' ')
+
 # Function to safely update the status file with locking
 update_status_file() {
     local action="$1"
@@ -40,13 +44,24 @@ update_status_file() {
     fi
 
     case "$action" in
-        add|update)
-            # Add or update instance
+        add)
+            # Add new instance with PID and terminal PID (first remove any old entries with same PID)
             /usr/bin/jq --arg sid "$SESSION_ID" \
                --arg status "$status" \
                --arg project "$CWD" \
                --arg ts "$TIMESTAMP" \
-               '.instances[$sid] = {status: $status, project: $project, lastUpdate: $ts}' \
+               --argjson pid "$PPID" \
+               --argjson termPid "${TERMINAL_PID:-0}" \
+               '.instances |= with_entries(select(.value.pid != $pid)) | .instances[$sid] = {status: $status, project: $project, lastUpdate: $ts, pid: $pid, terminalPid: $termPid}' \
+               "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
+            ;;
+        update)
+            # Update instance status (preserve existing PID)
+            /usr/bin/jq --arg sid "$SESSION_ID" \
+               --arg status "$status" \
+               --arg project "$CWD" \
+               --arg ts "$TIMESTAMP" \
+               '.instances[$sid].status = $status | .instances[$sid].project = $project | .instances[$sid].lastUpdate = $ts' \
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         remove)

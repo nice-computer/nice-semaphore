@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// The dropdown menu content shown when clicking the menu bar item
 struct MenuBarView: View {
@@ -78,47 +79,74 @@ struct InstanceRow: View {
     }
 }
 
-/// Generates the menu bar label showing colored dots
-struct MenuBarLabel: View {
-    let instances: [ClaudeInstance]
+/// Generates an NSImage for the menu bar showing colored dots
+func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?) -> NSImage {
+    let dotSize: CGFloat = 8
+    let spacing: CGFloat = 4
+    let height: CGFloat = 18
+    let underlineHeight: CGFloat = 2
+    let underlineGap: CGFloat = 2
 
-    var body: some View {
-        HStack(spacing: 2) {
-            if instances.isEmpty {
-                // Show a single gray dot when no instances
-                Circle()
-                    .fill(Color.gray.opacity(0.5))
-                    .frame(width: 8, height: 8)
-            } else if instances.count <= 4 {
-                // Show individual dots
-                ForEach(instances) { instance in
-                    Circle()
-                        .fill(colorForStatus(instance.status))
-                        .frame(width: 8, height: 8)
-                }
-            } else {
-                // Show count with primary status color
-                let workingCount = instances.filter { $0.status == .working }.count
-                let primaryColor = workingCount > 0 ? Color.orange : Color.green
+    // Determine dots to draw
+    struct DotInfo {
+        let color: NSColor
+        let isFocused: Bool
+    }
 
-                Circle()
-                    .fill(primaryColor)
-                    .frame(width: 8, height: 8)
+    let dots: [DotInfo]
+    if instances.isEmpty {
+        dots = [DotInfo(color: NSColor.gray, isFocused: false)]
+    } else if instances.count <= 4 {
+        dots = instances.map { instance in
+            DotInfo(
+                color: nsColorForStatus(instance.status),
+                isFocused: instance.id == focusedId
+            )
+        }
+    } else {
+        let workingCount = instances.filter { $0.status == .working }.count
+        let hasFocused = instances.contains { $0.id == focusedId }
+        dots = [DotInfo(
+            color: workingCount > 0 ? NSColor.orange : NSColor.systemGreen,
+            isFocused: hasFocused
+        )]
+    }
 
-                Text("\(instances.count)")
-                    .font(.system(size: 10, weight: .medium))
-            }
+    let width = CGFloat(dots.count) * dotSize + CGFloat(max(0, dots.count - 1)) * spacing
+    let image = NSImage(size: NSSize(width: width, height: height))
+
+    image.lockFocus()
+
+    for (index, dot) in dots.enumerated() {
+        let x = CGFloat(index) * (dotSize + spacing)
+        let y = (height - dotSize) / 2 + (dot.isFocused ? underlineHeight / 2 + underlineGap / 2 : 0)
+        let rect = NSRect(x: x, y: y, width: dotSize, height: dotSize)
+
+        dot.color.setFill()
+        NSBezierPath(ovalIn: rect).fill()
+
+        // Draw underline for focused instance
+        if dot.isFocused {
+            let underlineY = y - underlineGap - underlineHeight
+            let underlineRect = NSRect(x: x, y: underlineY, width: dotSize, height: underlineHeight)
+            dot.color.setFill()
+            NSBezierPath(roundedRect: underlineRect, xRadius: 1, yRadius: 1).fill()
         }
     }
 
-    private func colorForStatus(_ status: ClaudeInstance.Status) -> Color {
-        switch status {
-        case .working:
-            return .orange
-        case .waiting:
-            return .green
-        case .idle:
-            return .gray
-        }
+    image.unlockFocus()
+    image.isTemplate = false
+
+    return image
+}
+
+private func nsColorForStatus(_ status: ClaudeInstance.Status) -> NSColor {
+    switch status {
+    case .working:
+        return NSColor.orange
+    case .waiting:
+        return NSColor.systemGreen
+    case .idle:
+        return NSColor.gray
     }
 }

@@ -1,23 +1,86 @@
 import SwiftUI
+import Combine
 
 @main
 struct NiceToastApp: App {
-    @StateObject private var monitor = StatusFileMonitor()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarView(
-                instances: monitor.instances,
-                onQuit: {
-                    NSApplication.shared.terminate(nil)
-                }
-            )
-            .onAppear {
-                monitor.startMonitoring()
-            }
-        } label: {
-            MenuBarLabel(instances: monitor.instances)
+        Settings {
+            EmptyView()
         }
-        .menuBarExtraStyle(.window)
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    private var statusItem: NSStatusItem!
+    private var monitor: StatusFileMonitor!
+    private var cancellables = Set<AnyCancellable>()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Create status item
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+
+        // Create monitor
+        monitor = StatusFileMonitor()
+
+        // Subscribe to changes
+        Task { @MainActor in
+            monitor.$instances
+                .combineLatest(monitor.$focusedInstanceId)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] instances, focusedId in
+                    self?.updateIcon(instances: instances, focusedId: focusedId)
+                    self?.updateMenu(instances: instances)
+                }
+                .store(in: &cancellables)
+
+            monitor.startMonitoring()
+        }
+    }
+
+    private func updateIcon(instances: [ClaudeInstance], focusedId: String?) {
+        let image = createMenuBarImage(for: instances, focusedId: focusedId)
+        statusItem.button?.image = image
+    }
+
+    private func updateMenu(instances: [ClaudeInstance]) {
+        let menu = NSMenu()
+
+        if instances.isEmpty {
+            let item = NSMenuItem(title: "No Claude Code instances", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+        } else {
+            for instance in instances {
+                let title = "\(statusIcon(instance.status)) \(instance.displayPath)"
+                let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            }
+        }
+
+        menu.addItem(NSMenuItem.separator())
+
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        statusItem.menu = menu
+    }
+
+    private func statusIcon(_ status: ClaudeInstance.Status) -> String {
+        switch status {
+        case .working:
+            return "🟠"
+        case .waiting:
+            return "🟢"
+        case .idle:
+            return "⚪"
+        }
+    }
+
+    @objc private func quit() {
+        NSApplication.shared.terminate(nil)
     }
 }

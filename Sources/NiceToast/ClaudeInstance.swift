@@ -6,6 +6,8 @@ struct ClaudeInstance: Identifiable, Codable, Equatable {
     var status: Status
     var project: String
     var lastUpdate: Date
+    var pid: Int?         // Process ID of Claude instance
+    var terminalPid: Int? // Process ID of the terminal (for focus detection)
 
     enum Status: String, Codable {
         case working   // Claude is processing
@@ -36,6 +38,8 @@ struct StatusFile: Codable {
         var status: ClaudeInstance.Status
         var project: String
         var lastUpdate: Date
+        var pid: Int?
+        var terminalPid: Int?
     }
 
     /// Convert to array of ClaudeInstance
@@ -45,7 +49,9 @@ struct StatusFile: Codable {
                 id: id,
                 status: data.status,
                 project: data.project,
-                lastUpdate: data.lastUpdate
+                lastUpdate: data.lastUpdate,
+                pid: data.pid,
+                terminalPid: data.terminalPid
             )
         }.sorted { $0.lastUpdate > $1.lastUpdate }
     }
