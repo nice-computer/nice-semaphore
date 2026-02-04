@@ -61,9 +61,9 @@ struct InstanceRow: View {
         case .working:
             return .green
         case .waiting:
-            return .orange
+            return .red
         case .idle:
-            return .blue
+            return .yellow
         }
     }
 
@@ -131,19 +131,19 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
         let boxRect = NSRect(x: x, y: (height - boxSize) / 2, width: boxSize, height: boxSize)
         let path = NSBezierPath(roundedRect: boxRect, xRadius: 3, yRadius: 3)
 
+        let textColor = contrastingTextColor(for: item.color)
+
         if item.isFocused {
-            // Focused: outline only (transparent fill)
-            item.color.setStroke()
-            path.lineWidth = 2
-            path.stroke()
-            // White text for visibility
-            drawCenteredText(item.text, in: boxRect, color: .white)
-        } else {
-            // Not focused: filled box
+            // Focused: rounded square background
             item.color.setFill()
             path.fill()
-            // White text for contrast
-            drawCenteredText(item.text, in: boxRect, color: .white)
+            drawCenteredText(item.text, in: boxRect, color: textColor)
+        } else {
+            // Not focused: circle background
+            let circlePath = NSBezierPath(ovalIn: boxRect)
+            item.color.setFill()
+            circlePath.fill()
+            drawCenteredText(item.text, in: boxRect, color: textColor)
         }
 
         x += boxSize + spacing
@@ -176,13 +176,32 @@ private func drawCenteredText(_ text: String, in rect: NSRect, color: NSColor) {
     (text as NSString).draw(in: textRect, withAttributes: attributes)
 }
 
+/// Returns black or white depending on which has better contrast with the background
+private func contrastingTextColor(for backgroundColor: NSColor) -> NSColor {
+    // Convert to RGB color space
+    guard let rgbColor = backgroundColor.usingColorSpace(.sRGB) else {
+        return .white
+    }
+
+    // Calculate relative luminance using sRGB formula
+    let r = rgbColor.redComponent
+    let g = rgbColor.greenComponent
+    let b = rgbColor.blueComponent
+
+    // Weighted luminance (human eye is more sensitive to green)
+    let luminance = 0.299 * r + 0.587 * g + 0.114 * b
+
+    // Use black text for light backgrounds, white for dark
+    return luminance > 0.5 ? .black : .white
+}
+
 private func nsColorForStatus(_ status: ClaudeInstance.Status) -> NSColor {
     switch status {
     case .working:
         return NSColor.systemGreen
     case .waiting:
-        return NSColor.systemOrange
+        return NSColor.systemRed
     case .idle:
-        return NSColor.systemBlue
+        return NSColor.systemYellow
     }
 }

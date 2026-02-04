@@ -81,9 +81,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .working:
             return "🟢"
         case .waiting:
-            return "🟠"
+            return "🔴"
         case .idle:
-            return "🔵"
+            return "🟡"
         }
     }
 
