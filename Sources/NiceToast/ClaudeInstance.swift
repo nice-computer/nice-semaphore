@@ -8,6 +8,7 @@ struct ClaudeInstance: Identifiable, Codable, Equatable {
     var lastUpdate: Date
     var pid: Int?         // Process ID of Claude instance
     var terminalPid: Int? // Process ID of the terminal (for focus detection)
+    var tty: String?      // TTY path for foreground detection
 
     enum Status: String, Codable {
         case working   // Claude is processing
@@ -40,6 +41,7 @@ struct StatusFile: Codable {
         var lastUpdate: Date
         var pid: Int?
         var terminalPid: Int?
+        var tty: String?
     }
 
     /// Convert to array of ClaudeInstance
@@ -51,7 +53,8 @@ struct StatusFile: Codable {
                 project: data.project,
                 lastUpdate: data.lastUpdate,
                 pid: data.pid,
-                terminalPid: data.terminalPid
+                terminalPid: data.terminalPid,
+                tty: data.tty
             )
         }.sorted { $0.lastUpdate > $1.lastUpdate }
     }

@@ -25,6 +25,14 @@ TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 SHELL_PID=$(ps -o ppid= -p "$PPID" | tr -d ' ')
 TERMINAL_PID=$(ps -o ppid= -p "$SHELL_PID" 2>/dev/null | tr -d ' ')
 
+# Get the TTY for foreground detection
+TTY_PATH=$(ps -o tty= -p "$PPID" 2>/dev/null | tr -d ' ')
+if [ -n "$TTY_PATH" ] && [ "$TTY_PATH" != "??" ]; then
+    TTY_PATH="/dev/$TTY_PATH"
+else
+    TTY_PATH=""
+fi
+
 # Function to safely update the status file with locking
 update_status_file() {
     local action="$1"
@@ -45,14 +53,15 @@ update_status_file() {
 
     case "$action" in
         add)
-            # Add new instance with PID and terminal PID (first remove any old entries with same PID)
+            # Add new instance with PID, terminal PID, and TTY (first remove any old entries with same PID)
             /usr/bin/jq --arg sid "$SESSION_ID" \
                --arg status "$status" \
                --arg project "$CWD" \
                --arg ts "$TIMESTAMP" \
                --argjson pid "$PPID" \
                --argjson termPid "${TERMINAL_PID:-0}" \
-               '.instances |= with_entries(select(.value.pid != $pid)) | .instances[$sid] = {status: $status, project: $project, lastUpdate: $ts, pid: $pid, terminalPid: $termPid}' \
+               --arg tty "$TTY_PATH" \
+               '.instances |= with_entries(select(.value.pid != $pid)) | .instances[$sid] = {status: $status, project: $project, lastUpdate: $ts, pid: $pid, terminalPid: $termPid, tty: $tty}' \
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         update)

@@ -189,8 +189,8 @@ final class StatusFileMonitor: ObservableObject {
     }
 
     private func startFocusTimer() {
-        // Check focus more frequently for responsiveness
-        focusTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        // Check focus frequently for responsiveness
+        focusTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.updateFocusedInstance()
             }
@@ -208,11 +208,10 @@ final class StatusFileMonitor: ObservableObject {
         let frontmostPid = Int(frontmostApp.processIdentifier)
 
         // Check if any instance's Claude process is a descendant of the frontmost app
-        // This handles Terminal.app, iTerm2, VS Code terminals, etc.
         for instance in instances {
             guard let claudePid = instance.pid else { continue }
 
-            // Check if Claude process is a descendant of the frontmost app
+            // Check if Claude is a descendant of the frontmost app
             if isProcess(claudePid, descendantOf: frontmostPid) {
                 focusedInstanceId = instance.id
                 return
@@ -220,6 +219,23 @@ final class StatusFileMonitor: ObservableObject {
         }
 
         focusedInstanceId = nil
+    }
+
+    private func isProcessInForeground(pid: Int, tty: String) -> Bool {
+        // Get process info using sysctl
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, Int32(pid)]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return false }
+
+        // Get Claude's process group
+        let claudePgid = info.kp_eproc.e_pgid
+
+        // Get the terminal's foreground process group
+        let foregroundPgid = info.kp_eproc.e_tpgid
+
+        // Check if Claude's process group is the foreground group
+        return claudePgid == foregroundPgid
     }
 
     private func isProcess(_ pid: Int, descendantOf ancestorPid: Int) -> Bool {
