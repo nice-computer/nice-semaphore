@@ -32,6 +32,7 @@ HOOKS_CONFIG=$(cat << 'EOF'
   "hooks": {
     "SessionStart": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/status-hook.sh" }] }],
     "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/status-hook.sh" }] }],
+    "PreToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/status-hook.sh" }] }],
     "PostToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/status-hook.sh" }] }],
     "Stop": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/status-hook.sh" }] }],
     "SessionEnd": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/status-hook.sh" }] }]

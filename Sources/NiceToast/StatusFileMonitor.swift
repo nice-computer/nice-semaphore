@@ -112,15 +112,6 @@ final class StatusFileMonitor: ObservableObject {
             return
         }
 
-        // Check if file was actually modified
-        if let attrs = try? FileManager.default.attributesOfItem(atPath: statusFilePath),
-           let modDate = attrs[.modificationDate] as? Date {
-            if let lastMod = lastModificationDate, modDate <= lastMod {
-                return // File hasn't changed
-            }
-            lastModificationDate = modDate
-        }
-
         guard let data = FileManager.default.contents(atPath: statusFilePath) else {
             instances = []
             return
@@ -191,14 +182,16 @@ final class StatusFileMonitor: ObservableObject {
     }
 
     private func startFocusTimer() {
-        // Check focus frequently for responsiveness
+        // Check focus and reload status frequently for responsiveness
         focusTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
+                self?.loadStatusFile()
                 self?.updateFocusedInstance()
                 self?.updateSpaceNumbers()
             }
         }
         // Initial check
+        loadStatusFile()
         updateFocusedInstance()
         updateSpaceNumbers()
     }

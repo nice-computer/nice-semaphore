@@ -4,6 +4,11 @@
 
 STATUS_FILE="$HOME/.claude/instance-status.json"
 LOCK_FILE="$HOME/.claude/instance-status.lock"
+LOG_FILE="/tmp/status-hook.log"
+
+log() {
+    echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $1" >> "$LOG_FILE"
+}
 
 # Read JSON input from stdin
 INPUT=$(cat)
@@ -75,9 +80,10 @@ update_status_file() {
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         set_pending)
-            # Set pendingQuestion flag to true
+            # Set pendingQuestion flag and status to waiting immediately
             /usr/bin/jq --arg sid "$SESSION_ID" \
-               '.instances[$sid].pendingQuestion = true' \
+               --arg ts "$TIMESTAMP" \
+               '.instances[$sid].pendingQuestion = true | .instances[$sid].status = "waiting" | .instances[$sid].lastUpdate = $ts' \
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         clear_pending)
@@ -89,17 +95,17 @@ update_status_file() {
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         stop_check)
-            # On Stop: check pendingQuestion and set status accordingly
-            PENDING=$(/usr/bin/jq -r --arg sid "$SESSION_ID" '.instances[$sid].pendingQuestion // false' "$STATUS_FILE")
-            if [ "$PENDING" = "true" ]; then
-                NEW_STATUS="waiting"
-            else
-                NEW_STATUS="idle"
-            fi
+            # On Stop: turn is complete, always go to idle
             /usr/bin/jq --arg sid "$SESSION_ID" \
-               --arg status "$NEW_STATUS" \
                --arg ts "$TIMESTAMP" \
-               '.instances[$sid].status = $status | .instances[$sid].lastUpdate = $ts | .instances[$sid].pendingQuestion = false' \
+               '.instances[$sid].status = "idle" | .instances[$sid].lastUpdate = $ts | .instances[$sid].pendingQuestion = false' \
+               "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
+            ;;
+        ensure_working)
+            # If status is idle, change to working (handles resumed sessions)
+            /usr/bin/jq --arg sid "$SESSION_ID" \
+               --arg ts "$TIMESTAMP" \
+               'if .instances[$sid].status == "idle" then .instances[$sid].status = "working" | .instances[$sid].lastUpdate = $ts else . end' \
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         remove)
@@ -116,25 +122,48 @@ update_status_file() {
 }
 
 # Handle different hook events
+log "EVENT=$EVENT TOOL_NAME=$TOOL_NAME SESSION_ID=$SESSION_ID"
 case "$EVENT" in
     SessionStart)
+        log "→ add idle"
         update_status_file "add" "idle"
         ;;
     UserPromptSubmit)
+        log "→ clear_pending working"
         update_status_file "clear_pending" "working"
         ;;
-    PostToolUse)
-        # Check if this is a tool that asks user for input
+    PreToolUse)
+        # Set waiting BEFORE AskUserQuestion/ExitPlanMode runs (so user sees red while question is displayed)
+        log "→ PreToolUse tool=$TOOL_NAME"
         case "$TOOL_NAME" in
             AskUserQuestion|ExitPlanMode)
+                log "→ set_pending (question tool - pre)"
                 update_status_file "set_pending" ""
                 ;;
         esac
         ;;
+    PostToolUse)
+        # After any tool, ensure we're showing as working
+        log "→ PostToolUse tool=$TOOL_NAME"
+        case "$TOOL_NAME" in
+            AskUserQuestion|ExitPlanMode)
+                # Question was just answered, clear pending and set working
+                log "→ clear_pending working (after question)"
+                update_status_file "clear_pending" "working"
+                ;;
+            *)
+                # Any other tool means we're working - this catches resumed sessions
+                log "→ ensure_working"
+                update_status_file "ensure_working" ""
+                ;;
+        esac
+        ;;
     Stop)
+        log "→ stop → idle"
         update_status_file "stop_check" ""
         ;;
     SessionEnd)
+        log "→ remove"
         update_status_file "remove" ""
         ;;
 esac
