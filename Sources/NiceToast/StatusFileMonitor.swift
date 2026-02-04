@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import AppKit
+import CoreGraphics
 
 /// Monitors the Claude instance status file for changes using DispatchSource
 @MainActor
@@ -207,35 +208,116 @@ final class StatusFileMonitor: ObservableObject {
 
         let frontmostPid = Int(frontmostApp.processIdentifier)
 
-        // Check if any instance's Claude process is a descendant of the frontmost app
+        // Find all instances that are descendants of the frontmost app
+        var candidateInstances: [ClaudeInstance] = []
         for instance in instances {
             guard let claudePid = instance.pid else { continue }
 
-            // Check if Claude is a descendant of the frontmost app
             if isProcess(claudePid, descendantOf: frontmostPid) {
-                focusedInstanceId = instance.id
-                return
+                candidateInstances.append(instance)
             }
         }
 
+        // If no candidates, no focused instance
+        guard !candidateInstances.isEmpty else {
+            focusedInstanceId = nil
+            return
+        }
+
+        // If only one candidate, it's the focused one
+        if candidateInstances.count == 1 {
+            focusedInstanceId = candidateInstances[0].id
+            return
+        }
+
+        // Multiple candidates - try to match by frontmost window TTY or title
+        if let focusedInstance = findInstanceByFrontmostWindow(
+            candidates: candidateInstances,
+            appPid: frontmostPid
+        ) {
+            focusedInstanceId = focusedInstance.id
+            return
+        }
+
+        // Fallback: no match found
         focusedInstanceId = nil
     }
 
-    private func isProcessInForeground(pid: Int, tty: String) -> Bool {
-        // Get process info using sysctl
-        var info = kinfo_proc()
-        var size = MemoryLayout<kinfo_proc>.size
-        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, Int32(pid)]
-        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return false }
+    private func findInstanceByFrontmostWindow(
+        candidates: [ClaudeInstance],
+        appPid: Int
+    ) -> ClaudeInstance? {
+        // First, try iTerm2-specific AppleScript to get the focused session's TTY
+        if let focusedTty = getFocusedITermTty() {
+            for instance in candidates {
+                if instance.tty == focusedTty {
+                    return instance
+                }
+            }
+        }
 
-        // Get Claude's process group
-        let claudePgid = info.kp_eproc.e_pgid
+        // Fallback: try matching by window title
+        guard let windowList = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]] else {
+            return nil
+        }
 
-        // Get the terminal's foreground process group
-        let foregroundPgid = info.kp_eproc.e_tpgid
+        // Find the frontmost window belonging to our terminal app
+        for windowInfo in windowList {
+            guard let windowPid = windowInfo[kCGWindowOwnerPID as String] as? Int,
+                  windowPid == appPid,
+                  let windowName = windowInfo[kCGWindowName as String] as? String,
+                  !windowName.isEmpty else {
+                continue
+            }
 
-        // Check if Claude's process group is the foreground group
-        return claudePgid == foregroundPgid
+            // Try to match window title against instance projects
+            // Terminal windows often show the current directory in the title
+            for instance in candidates {
+                let projectName = instance.shortProjectName
+                let fullPath = instance.project
+
+                // Check if window title contains the project name or path
+                if windowName.contains(projectName) ||
+                   windowName.contains(fullPath) ||
+                   fullPath.contains(windowName) {
+                    return instance
+                }
+            }
+
+            // If we found a terminal window but couldn't match it, stop looking
+            // (it's the frontmost one, subsequent ones are behind it)
+            break
+        }
+
+        return nil
+    }
+
+    private func getFocusedITermTty() -> String? {
+        let script = """
+            tell application "iTerm2"
+                if (count of windows) > 0 then
+                    tell current session of current window
+                        return tty
+                    end tell
+                end if
+            end tell
+            """
+
+        guard let appleScript = NSAppleScript(source: script) else {
+            return nil
+        }
+
+        var error: NSDictionary?
+        let result = appleScript.executeAndReturnError(&error)
+
+        if error != nil {
+            return nil
+        }
+
+        return result.stringValue
     }
 
     private func isProcess(_ pid: Int, descendantOf ancestorPid: Int) -> Bool {
