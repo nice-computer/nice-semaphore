@@ -102,10 +102,10 @@ update_status_file() {
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         ensure_working)
-            # If status is idle, change to working (handles resumed sessions)
+            # If status is idle or waiting (permission prompt answered), change to working
             /usr/bin/jq --arg sid "$SESSION_ID" \
                --arg ts "$TIMESTAMP" \
-               'if .instances[$sid].status == "idle" then .instances[$sid].status = "working" | .instances[$sid].lastUpdate = $ts else . end' \
+               'if (.instances[$sid].status == "idle" or .instances[$sid].status == "waiting") then .instances[$sid].status = "working" | .instances[$sid].lastUpdate = $ts | .instances[$sid].pendingQuestion = false else . end' \
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         remove)
@@ -157,6 +157,11 @@ case "$EVENT" in
                 update_status_file "ensure_working" ""
                 ;;
         esac
+        ;;
+    Notification)
+        # Permission prompt notification - user needs to approve/deny
+        log "→ Notification (permission prompt)"
+        update_status_file "set_pending" ""
         ;;
     Stop)
         log "→ stop → idle"

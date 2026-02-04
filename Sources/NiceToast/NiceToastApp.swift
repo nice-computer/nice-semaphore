@@ -24,11 +24,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Create monitor
         monitor = StatusFileMonitor()
 
-        // Subscribe to changes
+        // Subscribe to changes - use RunLoop.main for immediate updates even when app isn't focused
         Task { @MainActor in
             monitor.$instances
                 .combineLatest(monitor.$focusedInstanceId, monitor.$spaceNumbers)
-                .receive(on: DispatchQueue.main)
+                .receive(on: RunLoop.main)
                 .sink { [weak self] instances, focusedId, spaceNumbers in
                     self?.updateIcon(instances: instances, focusedId: focusedId, spaceNumbers: spaceNumbers)
                     self?.updateMenu(instances: instances, spaceNumbers: spaceNumbers)
