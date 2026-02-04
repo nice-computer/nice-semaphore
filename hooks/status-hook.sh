@@ -12,6 +12,7 @@ INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | /usr/bin/jq -r '.session_id // empty')
 CWD=$(echo "$INPUT" | /usr/bin/jq -r '.cwd // empty')
 EVENT=$(echo "$INPUT" | /usr/bin/jq -r '.hook_event_name // empty')
+TOOL_NAME=$(echo "$INPUT" | /usr/bin/jq -r '.tool_name // empty')
 
 # Exit if we don't have required fields
 if [ -z "$SESSION_ID" ] || [ -z "$EVENT" ]; then
@@ -73,6 +74,34 @@ update_status_file() {
                '.instances[$sid].status = $status | .instances[$sid].project = $project | .instances[$sid].lastUpdate = $ts' \
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
+        set_pending)
+            # Set pendingQuestion flag to true
+            /usr/bin/jq --arg sid "$SESSION_ID" \
+               '.instances[$sid].pendingQuestion = true' \
+               "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
+            ;;
+        clear_pending)
+            # Clear pendingQuestion flag and update status
+            /usr/bin/jq --arg sid "$SESSION_ID" \
+               --arg status "$status" \
+               --arg ts "$TIMESTAMP" \
+               '.instances[$sid].pendingQuestion = false | .instances[$sid].status = $status | .instances[$sid].lastUpdate = $ts' \
+               "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
+            ;;
+        stop_check)
+            # On Stop: check pendingQuestion and set status accordingly
+            PENDING=$(/usr/bin/jq -r --arg sid "$SESSION_ID" '.instances[$sid].pendingQuestion // false' "$STATUS_FILE")
+            if [ "$PENDING" = "true" ]; then
+                NEW_STATUS="waiting"
+            else
+                NEW_STATUS="idle"
+            fi
+            /usr/bin/jq --arg sid "$SESSION_ID" \
+               --arg status "$NEW_STATUS" \
+               --arg ts "$TIMESTAMP" \
+               '.instances[$sid].status = $status | .instances[$sid].lastUpdate = $ts | .instances[$sid].pendingQuestion = false' \
+               "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
+            ;;
         remove)
             # Remove instance
             /usr/bin/jq --arg sid "$SESSION_ID" \
@@ -89,13 +118,21 @@ update_status_file() {
 # Handle different hook events
 case "$EVENT" in
     SessionStart)
-        update_status_file "add" "waiting"
+        update_status_file "add" "idle"
         ;;
     UserPromptSubmit)
-        update_status_file "update" "working"
+        update_status_file "clear_pending" "working"
+        ;;
+    PostToolUse)
+        # Check if this is a tool that asks user for input
+        case "$TOOL_NAME" in
+            AskUserQuestion|ExitPlanMode)
+                update_status_file "set_pending" ""
+                ;;
+        esac
         ;;
     Stop)
-        update_status_file "update" "waiting"
+        update_status_file "stop_check" ""
         ;;
     SessionEnd)
         update_status_file "remove" ""

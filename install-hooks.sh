@@ -32,6 +32,7 @@ HOOKS_CONFIG=$(cat << 'EOF'
   "hooks": {
     "SessionStart": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/status-hook.sh" }] }],
     "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/status-hook.sh" }] }],
+    "PostToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/status-hook.sh" }] }],
     "Stop": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/status-hook.sh" }] }],
     "SessionEnd": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/status-hook.sh" }] }]
   }
@@ -82,7 +83,8 @@ echo ""
 echo "The following hooks are now active:"
 echo "  - SessionStart: Tracks new Claude Code instances"
 echo "  - UserPromptSubmit: Marks instance as 'working'"
-echo "  - Stop: Marks instance as 'waiting'"
+echo "  - PostToolUse: Detects AskUserQuestion → 'waiting'"
+echo "  - Stop: Marks instance as 'idle' (or 'waiting' if question pending)"
 echo "  - SessionEnd: Removes instance from tracking"
 echo ""
 echo "Status is written to: $STATUS_FILE"
