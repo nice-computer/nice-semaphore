@@ -4,10 +4,10 @@
 
 STATUS_FILE="$HOME/.claude/nice-toast-status.json"
 LOCK_FILE="$HOME/.claude/nice-toast-status.lock"
-LOG_FILE="/tmp/status-hook.log"
+LOG_FILE="/tmp/nice-toast.log"
 
 log() {
-    echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $1" >> "$LOG_FILE"
+    [ -n "$NICE_TOAST_DEBUG" ] && echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $1" >> "$LOG_FILE"
 }
 
 # Read JSON input from stdin
