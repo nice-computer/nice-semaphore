@@ -61,7 +61,7 @@ struct InstanceRow: View {
         case .working:
             return .orange
         case .waiting:
-            return .yellow
+            return .red
         case .idle:
             return .green
         }
@@ -200,7 +200,7 @@ private func nsColorForStatus(_ status: ClaudeInstance.Status) -> NSColor {
     case .working:
         return NSColor.systemOrange
     case .waiting:
-        return NSColor.systemYellow
+        return NSColor.systemRed
     case .idle:
         return NSColor.systemGreen
     }
