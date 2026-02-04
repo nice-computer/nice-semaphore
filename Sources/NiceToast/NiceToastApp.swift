@@ -79,11 +79,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func statusIcon(_ status: ClaudeInstance.Status) -> String {
         switch status {
         case .working:
-            return "🟢"
+            return "🟠"
         case .waiting:
-            return "🔴"
-        case .idle:
             return "🟡"
+        case .idle:
+            return "🟢"
         }
     }
 

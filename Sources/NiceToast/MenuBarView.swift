@@ -59,11 +59,11 @@ struct InstanceRow: View {
     private func colorForStatus(_ status: ClaudeInstance.Status) -> Color {
         switch status {
         case .working:
-            return .green
+            return .orange
         case .waiting:
-            return .red
-        case .idle:
             return .yellow
+        case .idle:
+            return .green
         }
     }
 
@@ -198,10 +198,10 @@ private func contrastingTextColor(for backgroundColor: NSColor) -> NSColor {
 private func nsColorForStatus(_ status: ClaudeInstance.Status) -> NSColor {
     switch status {
     case .working:
-        return NSColor.systemGreen
+        return NSColor.systemOrange
     case .waiting:
-        return NSColor.systemRed
-    case .idle:
         return NSColor.systemYellow
+    case .idle:
+        return NSColor.systemGreen
     }
 }
