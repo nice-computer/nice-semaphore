@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "NiceToast",
+    name: "NiceSemaphore",
     platforms: [
         .macOS(.v13)
     ],
     targets: [
         .executableTarget(
-            name: "NiceToast",
-            path: "Sources/NiceToast"
+            name: "NiceSemaphore",
+            path: "Sources/NiceSemaphore"
         )
     ]
 )

@@ -1,4 +1,4 @@
-# NiceToast
+# NiceSemaphore
 
 A macOS menu bar app that monitors running Claude Code CLI instances and displays their status.
 
@@ -19,7 +19,7 @@ A macOS menu bar app that monitors running Claude Code CLI instances and display
 
 ## How It Works
 
-NiceToast uses Claude Code hooks to track instance status:
+NiceSemaphore uses Claude Code hooks to track instance status:
 
 | Hook | Triggers |
 |------|----------|
@@ -67,7 +67,7 @@ open Package.swift
 
 ```bash
 swift build -c release
-# Binary at .build/release/NiceToast
+# Binary at .build/release/NiceSemaphore
 ```
 
 ## Uninstall
@@ -89,8 +89,8 @@ Remove the hooks from `~/.claude/settings.json`:
 ```
 
 Optionally delete:
-- `~/.claude/hooks/nice-toast-status.sh`
-- `~/.claude/nice-toast-status.json`
+- `~/.claude/hooks/nice-semaphore-status.sh`
+- `~/.claude/nice-semaphore-status.json`
 
 ## Inspiration
 

@@ -2,12 +2,12 @@
 # Claude Code Status Hook
 # Reads hook input from stdin, updates ~/.claude/instance-status.json
 
-STATUS_FILE="$HOME/.claude/nice-toast-status.json"
-LOCK_FILE="$HOME/.claude/nice-toast-status.lock"
-LOG_FILE="/tmp/nice-toast.log"
+STATUS_FILE="$HOME/.claude/nice-semaphore-status.json"
+LOCK_FILE="$HOME/.claude/nice-semaphore-status.lock"
+LOG_FILE="/tmp/nice-semaphore.log"
 
 log() {
-    [ -n "$NICE_TOAST_DEBUG" ] && echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $1" >> "$LOG_FILE"
+    [ -n "$NICE_SEMAPHORE_DEBUG" ] && echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $1" >> "$LOG_FILE"
 }
 
 # Read JSON input from stdin

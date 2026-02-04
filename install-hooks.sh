@@ -1,6 +1,6 @@
 #!/bin/bash
 # Install Claude Code status hooks
-# This script installs the nice-toast-status.sh to ~/.claude/hooks/ and configures hooks in settings.json
+# This script installs the nice-semaphore-status.sh to ~/.claude/hooks/ and configures hooks in settings.json
 
 set -e
 
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="$HOME/.claude"
 HOOKS_DIR="$CLAUDE_DIR/hooks"
 SETTINGS_FILE="$CLAUDE_DIR/settings.json"
-HOOK_SCRIPT="$HOOKS_DIR/nice-toast-status.sh"
+HOOK_SCRIPT="$HOOKS_DIR/nice-semaphore-status.sh"
 
 echo "Installing Claude Code status hooks..."
 
@@ -16,7 +16,7 @@ echo "Installing Claude Code status hooks..."
 mkdir -p "$HOOKS_DIR"
 
 # Copy hook script
-cp "$SCRIPT_DIR/hooks/nice-toast-status.sh" "$HOOK_SCRIPT"
+cp "$SCRIPT_DIR/hooks/nice-semaphore-status.sh" "$HOOK_SCRIPT"
 chmod +x "$HOOK_SCRIPT"
 echo "✓ Installed hook script to $HOOK_SCRIPT"
 
@@ -30,13 +30,13 @@ fi
 HOOKS_CONFIG=$(cat << 'EOF'
 {
   "hooks": {
-    "SessionStart": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-toast-status.sh" }] }],
-    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-toast-status.sh" }] }],
-    "PreToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-toast-status.sh" }] }],
-    "PostToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-toast-status.sh" }] }],
-    "Notification": [{ "matcher": "permission_prompt", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-toast-status.sh" }] }],
-    "Stop": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-toast-status.sh" }] }],
-    "SessionEnd": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-toast-status.sh" }] }]
+    "SessionStart": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-semaphore-status.sh" }] }],
+    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-semaphore-status.sh" }] }],
+    "PreToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-semaphore-status.sh" }] }],
+    "PostToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-semaphore-status.sh" }] }],
+    "Notification": [{ "matcher": "permission_prompt", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-semaphore-status.sh" }] }],
+    "Stop": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-semaphore-status.sh" }] }],
+    "SessionEnd": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/nice-semaphore-status.sh" }] }]
   }
 }
 EOF
@@ -73,7 +73,7 @@ echo "$MERGED" > "$SETTINGS_FILE"
 echo "✓ Updated hooks in $SETTINGS_FILE"
 
 # Initialize empty status file
-STATUS_FILE="$CLAUDE_DIR/nice-toast-status.json"
+STATUS_FILE="$CLAUDE_DIR/nice-semaphore-status.json"
 if [ ! -f "$STATUS_FILE" ]; then
     echo '{"instances":{}}' > "$STATUS_FILE"
     echo "✓ Created $STATUS_FILE"

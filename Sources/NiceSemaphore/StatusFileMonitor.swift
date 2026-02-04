@@ -19,7 +19,7 @@ final class StatusFileMonitor: ObservableObject {
 
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        self.statusFilePath = "\(home)/.claude/nice-toast-status.json"
+        self.statusFilePath = "\(home)/.claude/nice-semaphore-status.json"
     }
 
     func startMonitoring() {

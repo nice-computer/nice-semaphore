@@ -2,7 +2,7 @@ import SwiftUI
 import Combine
 
 @main
-struct NiceToastApp: App {
+struct NiceSemaphoreApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
