@@ -2,8 +2,8 @@
 # Claude Code Status Hook
 # Reads hook input from stdin, updates ~/.claude/instance-status.json
 
-STATUS_FILE="$HOME/.claude/instance-status.json"
-LOCK_FILE="$HOME/.claude/instance-status.lock"
+STATUS_FILE="$HOME/.claude/nice-toast-status.json"
+LOCK_FILE="$HOME/.claude/nice-toast-status.lock"
 LOG_FILE="/tmp/status-hook.log"
 
 log() {

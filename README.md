@@ -89,8 +89,8 @@ Remove the hooks from `~/.claude/settings.json`:
 ```
 
 Optionally delete:
-- `~/.claude/hooks/status-hook.sh`
-- `~/.claude/instance-status.json`
+- `~/.claude/hooks/nice-toast-status.sh`
+- `~/.claude/nice-toast-status.json`
 
 ## Inspiration
 
