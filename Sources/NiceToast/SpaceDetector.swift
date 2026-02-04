@@ -3,6 +3,12 @@ import AppKit
 
 /// Detects which macOS Space a window is on using private CGS APIs
 enum SpaceDetector {
+    // Cache for iTerm window-TTY mapping (AppleScript is slow)
+    private static var cachedWindowTtyMap: [String: Int]?
+    private static var lastCacheTime: Date?
+    private static var lastInstanceCount: Int = 0
+    private static let cacheInterval: TimeInterval = 1.0  // Refresh at most every 1 second
+
     /// Get space numbers for Claude instances by matching their TTYs to iTerm2 windows
     static func getSpaceNumbers(for instances: [ClaudeInstance]) -> [String: Int] {
         var result: [String: Int] = [:]
@@ -12,8 +18,8 @@ enum SpaceDetector {
             return result
         }
 
-        // Get iTerm2 window -> TTY mapping via AppleScript
-        guard let windowTtyMap = getITermWindowTtyMap() else {
+        // Get iTerm2 window -> TTY mapping (cached)
+        guard let windowTtyMap = getCachedWindowTtyMap(instanceCount: instances.count) else {
             return result
         }
 
@@ -37,6 +43,24 @@ enum SpaceDetector {
     }
 
     // MARK: - Private
+
+    private static func getCachedWindowTtyMap(instanceCount: Int) -> [String: Int]? {
+        let now = Date()
+
+        // Refresh cache if: no cache, instance count changed, or cache expired
+        let needsRefresh = cachedWindowTtyMap == nil
+            || instanceCount != lastInstanceCount
+            || lastCacheTime == nil
+            || now.timeIntervalSince(lastCacheTime!) >= cacheInterval
+
+        if needsRefresh {
+            cachedWindowTtyMap = getITermWindowTtyMap()
+            lastCacheTime = now
+            lastInstanceCount = instanceCount
+        }
+
+        return cachedWindowTtyMap
+    }
 
     private static func getITermWindowTtyMap() -> [String: Int]? {
         let script = """
