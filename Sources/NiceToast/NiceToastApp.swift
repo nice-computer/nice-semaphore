@@ -27,11 +27,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Subscribe to changes
         Task { @MainActor in
             monitor.$instances
-                .combineLatest(monitor.$focusedInstanceId)
+                .combineLatest(monitor.$focusedInstanceId, monitor.$spaceNumbers)
                 .receive(on: DispatchQueue.main)
-                .sink { [weak self] instances, focusedId in
-                    self?.updateIcon(instances: instances, focusedId: focusedId)
-                    self?.updateMenu(instances: instances)
+                .sink { [weak self] instances, focusedId, spaceNumbers in
+                    self?.updateIcon(instances: instances, focusedId: focusedId, spaceNumbers: spaceNumbers)
+                    self?.updateMenu(instances: instances, spaceNumbers: spaceNumbers)
                 }
                 .store(in: &cancellables)
 
@@ -39,12 +39,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func updateIcon(instances: [ClaudeInstance], focusedId: String?) {
-        let image = createMenuBarImage(for: instances, focusedId: focusedId)
+    private func updateIcon(instances: [ClaudeInstance], focusedId: String?, spaceNumbers: [String: Int]) {
+        let image = createMenuBarImage(for: instances, focusedId: focusedId, spaceNumbers: spaceNumbers)
         statusItem.button?.image = image
     }
 
-    private func updateMenu(instances: [ClaudeInstance]) {
+    private func updateMenu(instances: [ClaudeInstance], spaceNumbers: [String: Int]) {
         let menu = NSMenu()
 
         if instances.isEmpty {
@@ -53,7 +53,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(item)
         } else {
             for instance in instances {
-                let title = "\(statusIcon(instance.status)) \(instance.displayPath)"
+                let spaceLabel = spaceNumbers[instance.id].map { "[\($0)] " } ?? ""
+                let title = "\(statusIcon(instance.status)) \(spaceLabel)\(instance.displayPath)"
                 let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
                 item.isEnabled = false
                 menu.addItem(item)

@@ -8,6 +8,7 @@ import CoreGraphics
 final class StatusFileMonitor: ObservableObject {
     @Published private(set) var instances: [ClaudeInstance] = []
     @Published private(set) var focusedInstanceId: String?
+    @Published private(set) var spaceNumbers: [String: Int] = [:]
 
     private let statusFilePath: String
     private var fileDescriptor: Int32 = -1
@@ -194,10 +195,16 @@ final class StatusFileMonitor: ObservableObject {
         focusTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.updateFocusedInstance()
+                self?.updateSpaceNumbers()
             }
         }
         // Initial check
         updateFocusedInstance()
+        updateSpaceNumbers()
+    }
+
+    private func updateSpaceNumbers() {
+        spaceNumbers = SpaceDetector.getSpaceNumbers(for: instances)
     }
 
     private func updateFocusedInstance() {

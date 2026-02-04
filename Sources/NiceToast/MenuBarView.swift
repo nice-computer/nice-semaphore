@@ -79,65 +79,101 @@ struct InstanceRow: View {
     }
 }
 
-/// Generates an NSImage for the menu bar showing colored dots
-func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?) -> NSImage {
-    let dotSize: CGFloat = 8
-    let spacing: CGFloat = 4
+/// Generates an NSImage for the menu bar showing space numbers in colored boxes
+func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spaceNumbers: [String: Int]) -> NSImage {
+    let boxSize: CGFloat = 16
+    let spacing: CGFloat = 2
     let height: CGFloat = 18
-    let underlineHeight: CGFloat = 2
-    let underlineGap: CGFloat = 2
 
-    // Determine dots to draw
-    struct DotInfo {
+    struct ItemInfo {
+        let text: String
         let color: NSColor
         let isFocused: Bool
     }
 
-    let dots: [DotInfo]
+    let items: [ItemInfo]
     if instances.isEmpty {
-        dots = [DotInfo(color: NSColor.gray, isFocused: false)]
-    } else if instances.count <= 4 {
-        dots = instances.map { instance in
-            DotInfo(
+        items = [ItemInfo(text: "–", color: NSColor.gray, isFocused: false)]
+    } else if instances.count <= 6 {
+        // Sort instances by space number (ascending), unknowns at end
+        let sorted = instances.sorted { a, b in
+            let spaceA = spaceNumbers[a.id] ?? Int.max
+            let spaceB = spaceNumbers[b.id] ?? Int.max
+            return spaceA < spaceB
+        }
+        items = sorted.map { instance in
+            let spaceNum = spaceNumbers[instance.id]
+            let text = spaceNum != nil ? "\(spaceNum!)" : "?"
+            return ItemInfo(
+                text: text,
                 color: nsColorForStatus(instance.status),
                 isFocused: instance.id == focusedId
             )
         }
     } else {
+        // Too many instances - show count
         let workingCount = instances.filter { $0.status == .working }.count
         let hasFocused = instances.contains { $0.id == focusedId }
-        dots = [DotInfo(
+        items = [ItemInfo(
+            text: "\(instances.count)",
             color: workingCount > 0 ? NSColor.orange : NSColor.systemGreen,
             isFocused: hasFocused
         )]
     }
 
-    let width = CGFloat(dots.count) * dotSize + CGFloat(max(0, dots.count - 1)) * spacing
-    let image = NSImage(size: NSSize(width: width, height: height))
+    let totalWidth = CGFloat(items.count) * boxSize + CGFloat(max(0, items.count - 1)) * spacing
+    let image = NSImage(size: NSSize(width: totalWidth, height: height))
 
     image.lockFocus()
 
-    for (index, dot) in dots.enumerated() {
-        let x = CGFloat(index) * (dotSize + spacing)
-        let y = (height - dotSize) / 2 + (dot.isFocused ? underlineHeight / 2 + underlineGap / 2 : 0)
-        let rect = NSRect(x: x, y: y, width: dotSize, height: dotSize)
+    var x: CGFloat = 0
+    for item in items {
+        let boxRect = NSRect(x: x, y: (height - boxSize) / 2, width: boxSize, height: boxSize)
+        let path = NSBezierPath(roundedRect: boxRect, xRadius: 3, yRadius: 3)
 
-        dot.color.setFill()
-        NSBezierPath(ovalIn: rect).fill()
-
-        // Draw underline for focused instance
-        if dot.isFocused {
-            let underlineY = y - underlineGap - underlineHeight
-            let underlineRect = NSRect(x: x, y: underlineY, width: dotSize, height: underlineHeight)
-            dot.color.setFill()
-            NSBezierPath(roundedRect: underlineRect, xRadius: 1, yRadius: 1).fill()
+        if item.isFocused {
+            // Focused: outline only (transparent fill)
+            item.color.setStroke()
+            path.lineWidth = 2
+            path.stroke()
+            // White text for visibility
+            drawCenteredText(item.text, in: boxRect, color: .white)
+        } else {
+            // Not focused: filled box
+            item.color.setFill()
+            path.fill()
+            // White text for contrast
+            drawCenteredText(item.text, in: boxRect, color: .white)
         }
+
+        x += boxSize + spacing
     }
 
     image.unlockFocus()
-    image.isTemplate = false
+    image.isTemplate = false  // Keep our colors
 
     return image
+}
+
+private func drawCenteredText(_ text: String, in rect: NSRect, color: NSColor) {
+    let font = NSFont.boldSystemFont(ofSize: 11)
+    let paragraphStyle = NSMutableParagraphStyle()
+    paragraphStyle.alignment = .center
+
+    let attributes: [NSAttributedString.Key: Any] = [
+        .font: font,
+        .foregroundColor: color,
+        .paragraphStyle: paragraphStyle
+    ]
+
+    let textSize = (text as NSString).size(withAttributes: attributes)
+    let textRect = NSRect(
+        x: rect.origin.x,
+        y: rect.origin.y + (rect.height - textSize.height) / 2,
+        width: rect.width,
+        height: textSize.height
+    )
+    (text as NSString).draw(in: textRect, withAttributes: attributes)
 }
 
 private func nsColorForStatus(_ status: ClaudeInstance.Status) -> NSColor {
