@@ -6,6 +6,9 @@ A macOS menu bar app that monitors running Claude Code instances and displays th
 
 Be alerted when a Claude Code instance is working (orange), needs input (red), or when it's idle and needs new instructions (green).
 
+> [!IMPORTANT]  
+> This is alpha software that works on my machine. Don't install yet unless you have some time to spend debugging early release issues.
+
 The current version is optimized for a workstation setup where:
 * You're using multiple spaces, and have tend to keep one or a few Claude Code instances in each space
 * You're running Claude Code CLI in iTerm2
