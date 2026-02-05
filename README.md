@@ -153,6 +153,16 @@ Optionally delete:
   brew install bats-core
   ```
 
+## Testing
+
+Run the test suite:
+
+```sh
+make test
+```
+
+Tests are written using [Bats](https://github.com/bats-core/bats-core) and cover the hook script's state transitions.
+
 ## Debugging
 
 ### Enable hook logging
