@@ -144,6 +144,50 @@ Optionally delete:
 * Support remote Claude Code instances
 * Support other coding agents (Codex, Gemini, OpenCode, Aider, etc)
 
+# Developing
+
+## Debugging
+
+### Enable hook logging
+
+Set the `NICE_SEMAPHORE_DEBUG` environment variable in the terminal session before starting Claude Code:
+
+```sh
+export NICE_SEMAPHORE_DEBUG=1
+claude
+```
+
+The hook script inherits the environment from the Claude Code process, so the variable must be set before `claude` starts. To enable permanently, add the export to your `~/.zshrc` or `~/.bashrc`.
+
+Logs are written to `/tmp/nice-semaphore.log`:
+
+```sh
+tail -f /tmp/nice-semaphore.log
+```
+
+### Inspect the status file
+
+View the current state of all tracked instances:
+
+```sh
+cat ~/.claude/nice-semaphore-status.json | jq
+```
+
+### Test the hook script manually
+
+Simulate a hook event:
+
+```sh
+echo '{"session_id": "test-123", "cwd": "/tmp/test", "hook_event_name": "SessionStart"}' | ~/.claude/hooks/nice-semaphore-status.sh
+```
+
+### Verify hooks are installed
+
+Check that hooks are configured in Claude Code settings:
+
+```sh
+cat ~/.claude/settings.json | jq '.hooks'
+```
 
 # Acknowledgments
 
