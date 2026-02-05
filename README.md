@@ -135,6 +135,16 @@ Optionally delete:
 - `~/.claude/hooks/nice-semaphore-status.sh`
 - `~/.claude/nice-semaphore-status.json`
 
+# Roadmap
+
+* Iron out bugs
+* Install hooks as Claude Code plugin
+* macOS app image
+* Support terminals other than iTerm
+* Support remote Claude Code instances
+* Support other coding agents (Codex, Gemini, OpenCode, Aider, etc)
+
+
 # Acknowledgments
 
 * **[SpaceId](https://github.com/dshnkao/SpaceId/)**  
