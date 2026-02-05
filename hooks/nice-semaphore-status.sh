@@ -2,12 +2,14 @@
 # Claude Code Status Hook
 # Reads hook input from stdin, updates ~/.claude/instance-status.json
 
-STATUS_FILE="$HOME/.claude/nice-semaphore-status.json"
-LOCK_FILE="$HOME/.claude/nice-semaphore-status.lock"
-LOG_FILE="/tmp/nice-semaphore.log"
+# Paths can be overridden via env vars for testing
+STATUS_FILE="${NICE_SEMAPHORE_STATUS_FILE:-$HOME/.claude/nice-semaphore-status.json}"
+LOCK_FILE="${NICE_SEMAPHORE_LOCK_FILE:-$HOME/.claude/nice-semaphore-status.lock}"
+LOG_FILE="${NICE_SEMAPHORE_LOG_FILE:-/tmp/nice-semaphore.log}"
 
 log() {
-    [ -n "$NICE_SEMAPHORE_DEBUG" ] && echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $1" >> "$LOG_FILE"
+    local project="${CWD##*/}"
+    [ -n "$NICE_SEMAPHORE_DEBUG" ] && echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] [$project] $1" >> "$LOG_FILE"
 }
 
 # Read JSON input from stdin

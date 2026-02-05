@@ -146,6 +146,13 @@ Optionally delete:
 
 # Developing
 
+## Requirements
+
+* Homebrew
+* ```sh
+  brew install bats-core
+  ```
+
 ## Debugging
 
 ### Enable hook logging
