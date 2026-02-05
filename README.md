@@ -1,15 +1,21 @@
-# NiceSemaphore
+# Nice Semaphore
 
-A macOS menu bar app that monitors running Claude Code CLI instances and displays their status.
+A macOS menu bar app that monitors running Claude Code instances and displays their status.
+
+Be alerted when a Claude Code instance needs input, or when it's complete and needs new instructions.
+
+The current version is optimized for a workstation setup where:
+* You're using multiple spaces, and have tend to keep one or a few Claude Code instances in each space
+* You're running Claude Code CLI in iTerm2
 
 ## Features
 
-- **Status indicators** - Colored boxes show each instance's state at a glance
-- **Space numbers** - Shows which macOS Space each instance is on
+- **Colored status indicators** - Colored boxes show each instance's state at a glance
+- **Space numbers** - Shows which macOS Space each instance is on (if running in iTerm2)
 - **Focus detection** - Highlights the currently focused instance (rounded square vs circle)
 - **Real-time updates** - Status changes appear immediately via Claude Code hooks
 
-## Status Colors
+## Status colors
 
 | Status | Color | Meaning |
 |--------|-------|---------|
@@ -17,21 +23,39 @@ A macOS menu bar app that monitors running Claude Code CLI instances and display
 | Waiting | Yellow | Claude needs your input (question or permission prompt) |
 | Idle | Green | Turn complete, ready for next prompt |
 
-## How It Works
+# How It Works
 
-NiceSemaphore uses Claude Code hooks to track instance status:
+Nice Semaphore has two components that communicate via a JSON status file:
 
-| Hook | Triggers |
-|------|----------|
-| `SessionStart` | New instance detected, set to idle |
-| `UserPromptSubmit` | User sent a message, set to working |
-| `PreToolUse` | Detects AskUserQuestion/ExitPlanMode, set to waiting |
-| `PostToolUse` | Tool completed, ensures working state |
-| `Notification` | Permission prompt shown, set to waiting |
-| `Stop` | Claude's turn ended, set to idle |
-| `SessionEnd` | Instance closed, removed from tracking |
+### 1. Hook Script (writes status)
 
-The menu bar shows colored boxes with Space numbers. Click to see the full list with project paths.
+Claude Code [hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) trigger shell commands on specific events. The `nice-semaphore-status.sh` hook script runs on each event and updates `~/.claude/nice-semaphore-status.json` with the current state of each Claude instance.
+
+| Hook | Status Change |
+|------|---------------|
+| `SessionStart` | Adds instance, sets to **idle** |
+| `UserPromptSubmit` | Sets to **working** |
+| `PreToolUse` | If AskUserQuestion/ExitPlanMode, sets to **waiting** |
+| `PostToolUse` | Ensures **working** state after tool completes |
+| `Notification` | If permission prompt, sets to **waiting** |
+| `Stop` | Sets to **idle** (turn complete) |
+| `SessionEnd` | Removes instance |
+
+The status file stores each instance's session ID, project path, status, PID, and TTY (for focus detection).
+
+### 2. Menu Bar App (reads status)
+
+The Swift app monitors `~/.claude/nice-semaphore-status.json` for changes using a `DispatchSource` file watcher. When the file changes, it:
+
+1. Parses the JSON to get all active instances
+2. Detects which instance is focused (by matching TTYs to the frontmost terminal window)
+3. Looks up Space numbers using macOS private CGS APIs
+4. Renders colored indicators in the menu bar
+
+The menu bar shows colored shapes with Space numbers. Click to see the full list with project paths.
+
+
+# Installation
 
 ## Requirements
 
@@ -40,37 +64,54 @@ The menu bar shows colored boxes with Space numbers. Click to see the full list 
 - iTerm2 (for focus detection)
 - `jq` (usually pre-installed on macOS)
 
-## Installation
+## Install manually via repo
 
-### 1. Install the hooks
+### 1. Clone the repo
 
-```bash
+```sh
+git clone https://github.com/nice-computer/nice-semaphore.git
+cd nice-semaphore
+```
+
+### 2. Build
+
+```sh
+swift build -c release
+```
+
+### 2. Install the hooks
+
+```sh
 ./install-hooks.sh
 ```
 
 This installs a hook script to `~/.claude/hooks/` and configures Claude Code to call it on session events. Your existing `~/.claude/settings.json` is backed up before modification.
 
-### 2. Build and run
+### 3. Run the app
 
-```bash
-swift build
-swift run
+```sh
+swift run -c release
 ```
 
-Or open in Xcode:
-
-```bash
-open Package.swift
+To run at login, add the binary to System Settings > General > Login Items:
+```
+.build/release/NiceSemaphore
 ```
 
-### Build for distribution
+### 4. Restart Claude Code instances
 
-```bash
-swift build -c release
-# Binary at .build/release/NiceSemaphore
-```
+Because Claude Code only reloads hooks on startup, you'll need to restart any Claude Code instances you'd like tracked.
 
-## Uninstall
+You can resume an exited Claude Code session by running `claude --continue` in the same working directory.
+
+
+## Install with homebrew
+
+Coming soon.
+
+
+
+# Uninstallation
 
 Remove the hooks from `~/.claude/settings.json`:
 
@@ -92,6 +133,19 @@ Optionally delete:
 - `~/.claude/hooks/nice-semaphore-status.sh`
 - `~/.claude/nice-semaphore-status.json`
 
-## Inspiration
+# Acknowledgments
 
-Visual design inspired by [SpaceId](https://github.com/dshnkao/SpaceId/) - a macOS menu bar app that shows the current Space number.
+* **[SpaceId](https://github.com/dshnkao/SpaceId/)**  
+  A macOS menu bar app that shows the current Space number.
+* **[yabai](https://github.com/asmvik/yabai)** and **[skhd](https://github.com/asmvik/skhd)**  
+  for i3wm-like tiling window management on macOS, keyboard driven and space aware
+* **[i3wm](https://i3wm.org/)**  
+  The og X11 tiling window manager
+
+
+# Sponsors
+
+Thanks to:
+
+* **[Nice Computer Company (nicecomputer.company)](https://nicecomputer.company/)** for sponsoring the coffee ☕️
+* **[Autographical (autographical.ai)](https://autographical.ai/)** for the context engineering 🧠
