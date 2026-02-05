@@ -4,7 +4,7 @@ A macOS menu bar app that monitors running Claude Code instances and displays th
 
 ![nice-semaphone in action](docs/hero_screenshot.png)
 
-Be alerted when a Claude Code instance is working (orange), needs input (red), or when it's complete and needs new instructions (green).
+Be alerted when a Claude Code instance is working (orange), needs input (red), or when it's idle and needs new instructions (green).
 
 The current version is optimized for a workstation setup where:
 * You're using multiple spaces, and have tend to keep one or a few Claude Code instances in each space
