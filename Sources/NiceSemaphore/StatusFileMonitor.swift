@@ -16,6 +16,7 @@ final class StatusFileMonitor: ObservableObject {
     private var lastModificationDate: Date?
     private var cleanupTimer: Timer?
     private var focusTimer: Timer?
+    private var cachedITermTtyScript: NSAppleScript?
 
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -81,14 +82,16 @@ final class StatusFileMonitor: ObservableObject {
             queue: .main
         )
 
-        source.setEventHandler { [weak self] in
+        dispatchSource = source
+
+        source.setEventHandler { [weak self, weak source] in
             guard let self = self else { return }
-            let flags = source.data
+            guard let flags = source?.data else { return }
             if flags.contains(.delete) || flags.contains(.rename) {
                 // File was deleted or renamed, restart monitoring
                 self.stopMonitoring()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    self.startMonitoring()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.startMonitoring()
                 }
             } else {
                 self.loadStatusFile()
@@ -102,18 +105,21 @@ final class StatusFileMonitor: ObservableObject {
             }
         }
 
-        dispatchSource = source
         source.resume()
     }
 
     private func loadStatusFile() {
         guard FileManager.default.fileExists(atPath: statusFilePath) else {
-            instances = []
+            if !instances.isEmpty {
+                instances = []
+            }
             return
         }
 
         guard let data = FileManager.default.contents(atPath: statusFilePath) else {
-            instances = []
+            if !instances.isEmpty {
+                instances = []
+            }
             return
         }
 
@@ -121,10 +127,15 @@ final class StatusFileMonitor: ObservableObject {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
             let statusFile = try decoder.decode(StatusFile.self, from: data)
-            instances = statusFile.toInstances()
+            let newInstances = statusFile.toInstances()
+            if newInstances != instances {
+                instances = newInstances
+            }
         } catch {
             // If parsing fails, reset instances
-            instances = []
+            if !instances.isEmpty {
+                instances = []
+            }
         }
     }
 
@@ -197,13 +208,22 @@ final class StatusFileMonitor: ObservableObject {
     }
 
     private func updateSpaceNumbers() {
-        spaceNumbers = SpaceDetector.getSpaceNumbers(for: instances)
+        let newSpaceNumbers = SpaceDetector.getSpaceNumbers(for: instances)
+        if newSpaceNumbers != spaceNumbers {
+            spaceNumbers = newSpaceNumbers
+        }
     }
 
     private func updateFocusedInstance() {
+        let newFocusedId = detectFocusedInstanceId()
+        if newFocusedId != focusedInstanceId {
+            focusedInstanceId = newFocusedId
+        }
+    }
+
+    private func detectFocusedInstanceId() -> String? {
         guard let frontmostApp = NSWorkspace.shared.frontmostApplication else {
-            focusedInstanceId = nil
-            return
+            return nil
         }
 
         let frontmostPid = Int(frontmostApp.processIdentifier)
@@ -220,14 +240,12 @@ final class StatusFileMonitor: ObservableObject {
 
         // If no candidates, no focused instance
         guard !candidateInstances.isEmpty else {
-            focusedInstanceId = nil
-            return
+            return nil
         }
 
         // If only one candidate, it's the focused one
         if candidateInstances.count == 1 {
-            focusedInstanceId = candidateInstances[0].id
-            return
+            return candidateInstances[0].id
         }
 
         // Multiple candidates - try to match by frontmost window TTY or title
@@ -235,12 +253,11 @@ final class StatusFileMonitor: ObservableObject {
             candidates: candidateInstances,
             appPid: frontmostPid
         ) {
-            focusedInstanceId = focusedInstance.id
-            return
+            return focusedInstance.id
         }
 
         // Fallback: no match found
-        focusedInstanceId = nil
+        return nil
     }
 
     private func findInstanceByFrontmostWindow(
@@ -296,28 +313,33 @@ final class StatusFileMonitor: ObservableObject {
     }
 
     private func getFocusedITermTty() -> String? {
-        let script = """
-            tell application "iTerm2"
-                if (count of windows) > 0 then
-                    tell current session of current window
-                        return tty
-                    end tell
-                end if
-            end tell
-            """
+        if cachedITermTtyScript == nil {
+            let script = """
+                tell application "iTerm2"
+                    if (count of windows) > 0 then
+                        tell current session of current window
+                            return tty
+                        end tell
+                    end if
+                end tell
+                """
+            cachedITermTtyScript = NSAppleScript(source: script)
+        }
 
-        guard let appleScript = NSAppleScript(source: script) else {
+        guard let appleScript = cachedITermTtyScript else {
             return nil
         }
 
-        var error: NSDictionary?
-        let result = appleScript.executeAndReturnError(&error)
+        return autoreleasepool {
+            var error: NSDictionary?
+            let result = appleScript.executeAndReturnError(&error)
 
-        if error != nil {
-            return nil
+            if error != nil {
+                return nil
+            }
+
+            return result.stringValue
         }
-
-        return result.stringValue
     }
 
     private func isProcess(_ pid: Int, descendantOf ancestorPid: Int) -> Bool {
