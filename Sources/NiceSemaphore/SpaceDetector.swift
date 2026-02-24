@@ -8,6 +8,7 @@ enum SpaceDetector {
     private static var lastCacheTime: Date?
     private static var lastInstanceCount: Int = 0
     private static let cacheInterval: TimeInterval = 1.0  // Refresh at most every 1 second
+    private static var cachedWindowTtyScript: NSAppleScript?
 
     /// Get space numbers for Claude instances by matching their TTYs to iTerm2 windows
     static func getSpaceNumbers(for instances: [ClaudeInstance]) -> [String: Int] {
@@ -63,52 +64,57 @@ enum SpaceDetector {
     }
 
     private static func getITermWindowTtyMap() -> [String: Int]? {
-        let script = """
-            set output to ""
-            tell application "iTerm2"
-                set windowList to every window
-                repeat with w in windowList
-                    set windowId to id of w
-                    set tabList to every tab of w
-                    repeat with t in tabList
-                        set sessionList to every session of t
-                        repeat with s in sessionList
-                            set output to output & windowId & ":" & (tty of s) & linefeed
+        if cachedWindowTtyScript == nil {
+            let script = """
+                set output to ""
+                tell application "iTerm2"
+                    set windowList to every window
+                    repeat with w in windowList
+                        set windowId to id of w
+                        set tabList to every tab of w
+                        repeat with t in tabList
+                            set sessionList to every session of t
+                            repeat with s in sessionList
+                                set output to output & windowId & ":" & (tty of s) & linefeed
+                            end repeat
                         end repeat
                     end repeat
-                end repeat
-            end tell
-            return output
-            """
+                end tell
+                return output
+                """
+            cachedWindowTtyScript = NSAppleScript(source: script)
+        }
 
-        guard let appleScript = NSAppleScript(source: script) else {
+        guard let appleScript = cachedWindowTtyScript else {
             return nil
         }
 
-        var error: NSDictionary?
-        let result = appleScript.executeAndReturnError(&error)
+        return autoreleasepool {
+            var error: NSDictionary?
+            let result = appleScript.executeAndReturnError(&error)
 
-        if error != nil {
-            return nil
-        }
-
-        guard let output = result.stringValue else {
-            return nil
-        }
-
-        // Parse "windowId:tty" lines
-        var map: [String: Int] = [:]
-        for line in output.split(separator: "\n") {
-            let parts = line.split(separator: ":")
-            if parts.count >= 2,
-               let windowId = Int(parts[0]) {
-                // TTY comes as /dev/ttysXXX, join remaining parts in case path has colons
-                let tty = parts[1...].joined(separator: ":")
-                map[tty] = windowId
+            if error != nil {
+                return nil
             }
-        }
 
-        return map
+            guard let output = result.stringValue else {
+                return nil
+            }
+
+            // Parse "windowId:tty" lines
+            var map: [String: Int] = [:]
+            for line in output.split(separator: "\n") {
+                let parts = line.split(separator: ":")
+                if parts.count >= 2,
+                   let windowId = Int(parts[0]) {
+                    // TTY comes as /dev/ttysXXX, join remaining parts in case path has colons
+                    let tty = parts[1...].joined(separator: ":")
+                    map[tty] = windowId
+                }
+            }
+
+            return map
+        }
     }
 
     private static func getSpaceIdToIndexMap() -> [Int: Int]? {
