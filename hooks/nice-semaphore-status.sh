@@ -82,32 +82,32 @@ update_status_file() {
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         set_pending)
-            # Set pendingQuestion flag and status to waiting immediately
+            # Set pendingQuestion flag and status to waiting immediately (only if instance exists)
             /usr/bin/jq --arg sid "$SESSION_ID" \
                --arg ts "$TIMESTAMP" \
-               '.instances[$sid].pendingQuestion = true | .instances[$sid].status = "waiting" | .instances[$sid].lastUpdate = $ts' \
+               'if (.instances | has($sid)) then .instances[$sid].pendingQuestion = true | .instances[$sid].status = "waiting" | .instances[$sid].lastUpdate = $ts else . end' \
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         clear_pending)
-            # Clear pendingQuestion flag and update status
+            # Clear pendingQuestion flag and update status (only if instance exists)
             /usr/bin/jq --arg sid "$SESSION_ID" \
                --arg status "$status" \
                --arg ts "$TIMESTAMP" \
-               '.instances[$sid].pendingQuestion = false | .instances[$sid].status = $status | .instances[$sid].lastUpdate = $ts' \
+               'if (.instances | has($sid)) then .instances[$sid].pendingQuestion = false | .instances[$sid].status = $status | .instances[$sid].lastUpdate = $ts else . end' \
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         stop_check)
-            # On Stop: turn is complete, always go to idle
+            # On Stop: turn is complete, always go to idle (only if instance exists)
             /usr/bin/jq --arg sid "$SESSION_ID" \
                --arg ts "$TIMESTAMP" \
-               '.instances[$sid].status = "idle" | .instances[$sid].lastUpdate = $ts | .instances[$sid].pendingQuestion = false' \
+               'if (.instances | has($sid)) then .instances[$sid].status = "idle" | .instances[$sid].lastUpdate = $ts | .instances[$sid].pendingQuestion = false else . end' \
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         ensure_working)
-            # If status is idle or waiting (permission prompt answered), change to working
+            # If status is idle or waiting (permission prompt answered), change to working (only if instance exists)
             /usr/bin/jq --arg sid "$SESSION_ID" \
                --arg ts "$TIMESTAMP" \
-               'if (.instances[$sid].status == "idle" or .instances[$sid].status == "waiting") then .instances[$sid].status = "working" | .instances[$sid].lastUpdate = $ts | .instances[$sid].pendingQuestion = false else . end' \
+               'if ((.instances | has($sid)) and (.instances[$sid].status == "idle" or .instances[$sid].status == "waiting")) then .instances[$sid].status = "working" | .instances[$sid].lastUpdate = $ts | .instances[$sid].pendingQuestion = false else . end' \
                "$STATUS_FILE" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
             ;;
         remove)
