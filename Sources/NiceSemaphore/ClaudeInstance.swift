@@ -37,20 +37,21 @@ struct StatusFile: Codable {
 
     struct InstanceData: Codable {
         var status: ClaudeInstance.Status
-        var project: String
+        var project: String?
         var lastUpdate: Date
         var pid: Int?
         var terminalPid: Int?
         var tty: String?
     }
 
-    /// Convert to array of ClaudeInstance
+    /// Convert to array of ClaudeInstance, skipping entries missing required fields
     func toInstances() -> [ClaudeInstance] {
-        return instances.map { (id, data) in
-            ClaudeInstance(
+        return instances.compactMap { (id, data) in
+            guard let project = data.project else { return nil }
+            return ClaudeInstance(
                 id: id,
                 status: data.status,
-                project: data.project,
+                project: project,
                 lastUpdate: data.lastUpdate,
                 pid: data.pid,
                 terminalPid: data.terminalPid,
