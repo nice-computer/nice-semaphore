@@ -218,7 +218,7 @@ let pastelYellow = NSColor(srgbRed: 1.0, green: 0.92, blue: 0.55, alpha: 1.0)
 
 func fadedIdleColor(since lastUpdate: Date) -> NSColor {
     let minutesIdle = max(0, -lastUpdate.timeIntervalSinceNow / 60.0)
-    let fraction = CGFloat(min(minutesIdle / 20.0, 0.6))
+    let fraction = CGFloat(min(minutesIdle / 90.0, 0.6))
 
     guard let green = NSColor.systemGreen.usingColorSpace(.sRGB),
           let gray = NSColor.systemGray.usingColorSpace(.sRGB) else {
