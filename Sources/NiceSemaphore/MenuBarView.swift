@@ -80,7 +80,7 @@ struct InstanceRow: View {
 }
 
 /// Generates an NSImage for the menu bar showing space numbers in colored boxes
-func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spaceNumbers: [String: Int]) -> NSImage {
+func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spaceNumbers: [String: Int], focusedSinceIdle: Set<String>) -> NSImage {
     let boxSize: CGFloat = 16
     let spacing: CGFloat = 2
     let height: CGFloat = 18
@@ -89,11 +89,12 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
         let text: String
         let color: NSColor
         let isFocused: Bool
+        let isTriangle: Bool
     }
 
     let items: [ItemInfo]
     if instances.isEmpty {
-        items = [ItemInfo(text: "–", color: NSColor.gray, isFocused: false)]
+        items = [ItemInfo(text: "–", color: NSColor.gray, isFocused: false, isTriangle: false)]
     } else if instances.count <= 6 {
         // Sort instances by space number (ascending), unknowns at end
         let sorted = instances.sorted { a, b in
@@ -104,10 +105,21 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
         items = sorted.map { instance in
             let spaceNum = spaceNumbers[instance.id]
             let text = spaceNum != nil ? "\(spaceNum!)" : "?"
+            let color: NSColor
+            let isTriangle: Bool
+            if instance.status == .idle {
+                let unfocused = !focusedSinceIdle.contains(instance.id) && instance.id != focusedId
+                color = unfocused ? pastelYellow : fadedIdleColor(since: instance.lastUpdate)
+                isTriangle = unfocused
+            } else {
+                color = nsColorForStatus(instance.status)
+                isTriangle = false
+            }
             return ItemInfo(
                 text: text,
-                color: nsColorForStatus(instance.status),
-                isFocused: instance.id == focusedId
+                color: color,
+                isFocused: instance.id == focusedId,
+                isTriangle: isTriangle
             )
         }
     } else {
@@ -117,7 +129,8 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
         items = [ItemInfo(
             text: "\(instances.count)",
             color: workingCount > 0 ? NSColor.orange : NSColor.systemGreen,
-            isFocused: hasFocused
+            isFocused: hasFocused,
+            isTriangle: false
         )]
     }
 
@@ -138,8 +151,14 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
             item.color.setFill()
             path.fill()
             drawCenteredText(item.text, in: boxRect, color: textColor)
+        } else if item.isTriangle {
+            // Not yet focused since idle - pastel yellow circle
+            let circlePath = NSBezierPath(ovalIn: boxRect)
+            item.color.setFill()
+            circlePath.fill()
+            drawCenteredText(item.text, in: boxRect, color: textColor)
         } else {
-            // Not focused: circle background
+            // Not focused: filled circle background
             let circlePath = NSBezierPath(ovalIn: boxRect)
             item.color.setFill()
             circlePath.fill()
@@ -193,6 +212,23 @@ private func contrastingTextColor(for backgroundColor: NSColor) -> NSColor {
 
     // Use black text for light backgrounds, white for dark
     return luminance > 0.5 ? .black : .white
+}
+
+let pastelYellow = NSColor(srgbRed: 1.0, green: 0.92, blue: 0.55, alpha: 1.0)
+
+func fadedIdleColor(since lastUpdate: Date) -> NSColor {
+    let minutesIdle = max(0, -lastUpdate.timeIntervalSinceNow / 60.0)
+    let fraction = CGFloat(min(minutesIdle / 20.0, 0.6))
+
+    guard let green = NSColor.systemGreen.usingColorSpace(.sRGB),
+          let gray = NSColor.systemGray.usingColorSpace(.sRGB) else {
+        return NSColor.systemGreen
+    }
+
+    let r = green.redComponent + fraction * (gray.redComponent - green.redComponent)
+    let g = green.greenComponent + fraction * (gray.greenComponent - green.greenComponent)
+    let b = green.blueComponent + fraction * (gray.blueComponent - green.blueComponent)
+    return NSColor(srgbRed: r, green: g, blue: b, alpha: 1.0)
 }
 
 private func nsColorForStatus(_ status: ClaudeInstance.Status) -> NSColor {

@@ -25,7 +25,7 @@ The current version is optimized for a workstation setup where:
 | Status | Color | Meaning |
 |--------|-------|---------|
 | Working | Orange | Claude is processing/using tools |
-| Waiting | Yellow | Claude needs your input (question or permission prompt) |
+| Waiting | Red | Claude needs your input (question or permission prompt) |
 | Idle | Green | Turn complete, ready for next prompt |
 
 # How It Works

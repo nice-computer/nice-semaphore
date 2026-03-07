@@ -28,10 +28,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             monitor.$instances
                 .combineLatest(monitor.$focusedInstanceId, monitor.$spaceNumbers)
+                .combineLatest(monitor.$focusedSinceIdle, monitor.$renderTick)
                 .receive(on: RunLoop.main)
-                .sink { [weak self] instances, focusedId, spaceNumbers in
-                    self?.updateIcon(instances: instances, focusedId: focusedId, spaceNumbers: spaceNumbers)
-                    self?.updateMenu(instances: instances, focusedId: focusedId, spaceNumbers: spaceNumbers)
+                .sink { [weak self] combined, focusedSinceIdle, _ in
+                    let (instances, focusedId, spaceNumbers) = combined
+                    self?.updateIcon(instances: instances, focusedId: focusedId, spaceNumbers: spaceNumbers, focusedSinceIdle: focusedSinceIdle)
+                    self?.updateMenu(instances: instances, focusedId: focusedId, spaceNumbers: spaceNumbers, focusedSinceIdle: focusedSinceIdle)
                 }
                 .store(in: &cancellables)
 
@@ -39,12 +41,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func updateIcon(instances: [ClaudeInstance], focusedId: String?, spaceNumbers: [String: Int]) {
-        let image = createMenuBarImage(for: instances, focusedId: focusedId, spaceNumbers: spaceNumbers)
+    private func updateIcon(instances: [ClaudeInstance], focusedId: String?, spaceNumbers: [String: Int], focusedSinceIdle: Set<String>) {
+        let image = createMenuBarImage(for: instances, focusedId: focusedId, spaceNumbers: spaceNumbers, focusedSinceIdle: focusedSinceIdle)
         statusItem.button?.image = image
     }
 
-    private func updateMenu(instances: [ClaudeInstance], focusedId: String?, spaceNumbers: [String: Int]) {
+    private func updateMenu(instances: [ClaudeInstance], focusedId: String?, spaceNumbers: [String: Int], focusedSinceIdle: Set<String>) {
         let menu = NSMenu()
 
         if instances.isEmpty {
@@ -64,7 +66,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
                 item.image = createMenuItemIcon(
                     status: instance.status,
-                    isFocused: instance.id == focusedId
+                    isFocused: instance.id == focusedId,
+                    isIdleTriangle: instance.status == .idle && !focusedSinceIdle.contains(instance.id) && instance.id != focusedId,
+                    lastUpdate: instance.lastUpdate
                 )
                 item.isEnabled = false
                 menu.addItem(item)
@@ -80,22 +84,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
     }
 
-    private func createMenuItemIcon(status: ClaudeInstance.Status, isFocused: Bool) -> NSImage {
+    private func createMenuItemIcon(status: ClaudeInstance.Status, isFocused: Bool, isIdleTriangle: Bool, lastUpdate: Date) -> NSImage {
         let size: CGFloat = 14
         let image = NSImage(size: NSSize(width: size, height: size))
 
         image.lockFocus()
 
         let rect = NSRect(x: 0, y: 0, width: size, height: size)
-        let color = nsColorForStatus(status)
+        let color = status == .idle ? fadedIdleColor(since: lastUpdate) : nsColorForStatus(status)
 
         if isFocused {
             // Focused: rounded square
             let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
             color.setFill()
             path.fill()
+        } else if isIdleTriangle {
+            // Not yet focused since idle - pastel yellow circle
+            let yellowColor = pastelYellow
+            let path = NSBezierPath(ovalIn: rect)
+            yellowColor.setFill()
+            path.fill()
         } else {
-            // Not focused: circle
+            // Not focused: filled circle
             let path = NSBezierPath(ovalIn: rect)
             color.setFill()
             path.fill()
