@@ -223,6 +223,12 @@ final class StatusFileMonitor: ObservableObject {
     }
 
     private func trackIdleTransitions(from oldInstances: [ClaudeInstance], to newInstances: [ClaudeInstance]) {
+        // On initial load, assume all idle instances have been seen
+        if oldInstances.isEmpty {
+            focusedSinceIdle = Set(newInstances.filter { $0.status == .idle }.map { $0.id })
+            return
+        }
+
         let oldStatuses = Dictionary(uniqueKeysWithValues: oldInstances.map { ($0.id, $0.status) })
         var updated = focusedSinceIdle
 
