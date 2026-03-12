@@ -91,7 +91,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         image.lockFocus()
 
         let rect = NSRect(x: 0, y: 0, width: size, height: size)
-        let color = status == .idle ? fadedIdleColor(since: lastUpdate) : nsColorForStatus(status)
+        let color = status == .idle
+            ? (enableIdleGreenFade ? fadedIdleColor(since: lastUpdate) : NSColor.systemGreen)
+            : nsColorForStatus(status)
 
         if isFocused {
             // Focused: rounded square

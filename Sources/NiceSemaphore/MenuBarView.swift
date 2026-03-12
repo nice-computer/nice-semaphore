@@ -109,7 +109,8 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
             let isTriangle: Bool
             if instance.status == .idle {
                 let unfocused = !focusedSinceIdle.contains(instance.id) && instance.id != focusedId
-                color = unfocused ? pastelYellow : fadedIdleColor(since: instance.lastUpdate)
+                let idleGreen = enableIdleGreenFade ? fadedIdleColor(since: instance.lastUpdate) : NSColor.systemGreen
+                color = unfocused ? pastelYellow : idleGreen
                 isTriangle = unfocused
             } else {
                 color = nsColorForStatus(instance.status)
@@ -214,6 +215,7 @@ private func contrastingTextColor(for backgroundColor: NSColor) -> NSColor {
     return luminance > 0.5 ? .black : .white
 }
 
+let enableIdleGreenFade = false
 let pastelYellow = NSColor(srgbRed: 1.0, green: 0.92, blue: 0.55, alpha: 1.0)
 
 func fadedIdleColor(since lastUpdate: Date) -> NSColor {
