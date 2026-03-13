@@ -26,7 +26,7 @@ The current version is optimized for a workstation setup where:
 |--------|-------|---------|
 | Working | Orange | Claude is processing/using tools |
 | Waiting | Red | Claude needs your input (question or permission prompt) |
-| Idle | Yellow | Turn complete, needs focus |
+| Idle | Yellow | Claude just finished. Needs your review |
 | Ready | Green | Turn complete, ready for next prompt |
 
 # How It Works
