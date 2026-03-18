@@ -27,11 +27,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Subscribe to changes - use RunLoop.main for immediate updates even when app isn't focused
         Task { @MainActor in
             monitor.$instances
-                .combineLatest(monitor.$focusedInstanceId, monitor.$spaceNumbers)
-                .combineLatest(monitor.$focusedSinceIdle, monitor.$renderTick)
+                .combineLatest(monitor.$focusedInstanceId, monitor.$spaceNumbers, monitor.$focusedSinceIdle)
                 .receive(on: RunLoop.main)
-                .sink { [weak self] combined, focusedSinceIdle, _ in
-                    let (instances, focusedId, spaceNumbers) = combined
+                .sink { [weak self] instances, focusedId, spaceNumbers, focusedSinceIdle in
                     self?.updateIcon(instances: instances, focusedId: focusedId, spaceNumbers: spaceNumbers, focusedSinceIdle: focusedSinceIdle)
                     self?.updateMenu(instances: instances, focusedId: focusedId, spaceNumbers: spaceNumbers, focusedSinceIdle: focusedSinceIdle)
                 }
@@ -64,11 +62,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let spaceLabel = spaceNumbers[instance.id].map { "[\($0)] " } ?? ""
                 let title = "\(spaceLabel)\(instance.displayPath)"
                 let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                let unseen = instance.status == .idle && !focusedSinceIdle.contains(instance.id) && instance.id != focusedId
+                let iconColor = unseen ? pastelYellow : nsColorForStatus(instance.status)
                 item.image = createMenuItemIcon(
-                    status: instance.status,
-                    isFocused: instance.id == focusedId,
-                    isIdleTriangle: instance.status == .idle && !focusedSinceIdle.contains(instance.id) && instance.id != focusedId,
-                    lastUpdate: instance.lastUpdate
+                    color: iconColor,
+                    isFocused: instance.id == focusedId
                 )
                 item.isEnabled = false
                 menu.addItem(item)
@@ -84,30 +82,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
     }
 
-    private func createMenuItemIcon(status: ClaudeInstance.Status, isFocused: Bool, isIdleTriangle: Bool, lastUpdate: Date) -> NSImage {
+    private func createMenuItemIcon(color: NSColor, isFocused: Bool) -> NSImage {
         let size: CGFloat = 14
         let image = NSImage(size: NSSize(width: size, height: size))
 
         image.lockFocus()
 
         let rect = NSRect(x: 0, y: 0, width: size, height: size)
-        let color = status == .idle
-            ? (enableIdleGreenFade ? fadedIdleColor(since: lastUpdate) : NSColor.systemGreen)
-            : nsColorForStatus(status)
 
         if isFocused {
-            // Focused: rounded square
             let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
             color.setFill()
             path.fill()
-        } else if isIdleTriangle {
-            // Not yet focused since idle - pastel yellow circle
-            let yellowColor = pastelYellow
-            let path = NSBezierPath(ovalIn: rect)
-            yellowColor.setFill()
-            path.fill()
         } else {
-            // Not focused: filled circle
             let path = NSBezierPath(ovalIn: rect)
             color.setFill()
             path.fill()

@@ -10,8 +10,6 @@ final class StatusFileMonitor: ObservableObject {
     @Published private(set) var focusedInstanceId: String?
     @Published private(set) var spaceNumbers: [String: Int] = [:]
     @Published private(set) var focusedSinceIdle: Set<String> = []
-    @Published private(set) var renderTick: UInt = 0
-    private var renderTickCounter: Int = 0
 
     private let statusFilePath: String
     private var fileDescriptor: Int32 = -1
@@ -206,7 +204,6 @@ final class StatusFileMonitor: ObservableObject {
                 self?.loadStatusFile()
                 self?.updateFocusedInstance()
                 self?.updateSpaceNumbers()
-                self?.updateRenderTick()
             }
         }
         // Initial check
@@ -247,13 +244,6 @@ final class StatusFileMonitor: ObservableObject {
 
         if updated != focusedSinceIdle {
             focusedSinceIdle = updated
-        }
-    }
-
-    private func updateRenderTick() {
-        renderTickCounter += 1
-        if renderTickCounter % 300 == 0 {  // Every 30 seconds
-            renderTick &+= 1
         }
     }
 

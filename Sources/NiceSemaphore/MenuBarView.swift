@@ -89,12 +89,11 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
         let text: String
         let color: NSColor
         let isFocused: Bool
-        let isTriangle: Bool
     }
 
     let items: [ItemInfo]
     if instances.isEmpty {
-        items = [ItemInfo(text: "–", color: NSColor.gray, isFocused: false, isTriangle: false)]
+        items = [ItemInfo(text: "–", color: NSColor.gray, isFocused: false)]
     } else if instances.count <= 6 {
         // Sort instances by space number (ascending), unknowns at end
         let sorted = instances.sorted { a, b in
@@ -106,21 +105,16 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
             let spaceNum = spaceNumbers[instance.id]
             let text = spaceNum != nil ? "\(spaceNum!)" : "?"
             let color: NSColor
-            let isTriangle: Bool
             if instance.status == .idle {
-                let unfocused = !focusedSinceIdle.contains(instance.id) && instance.id != focusedId
-                let idleGreen = enableIdleGreenFade ? fadedIdleColor(since: instance.lastUpdate) : NSColor.systemGreen
-                color = unfocused ? pastelYellow : idleGreen
-                isTriangle = unfocused
+                let unseen = !focusedSinceIdle.contains(instance.id) && instance.id != focusedId
+                color = unseen ? pastelYellow : NSColor.systemGreen
             } else {
                 color = nsColorForStatus(instance.status)
-                isTriangle = false
             }
             return ItemInfo(
                 text: text,
                 color: color,
-                isFocused: instance.id == focusedId,
-                isTriangle: isTriangle
+                isFocused: instance.id == focusedId
             )
         }
     } else {
@@ -130,8 +124,7 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
         items = [ItemInfo(
             text: "\(instances.count)",
             color: workingCount > 0 ? NSColor.orange : NSColor.systemGreen,
-            isFocused: hasFocused,
-            isTriangle: false
+            isFocused: hasFocused
         )]
     }
 
@@ -152,14 +145,8 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
             item.color.setFill()
             path.fill()
             drawCenteredText(item.text, in: boxRect, color: textColor)
-        } else if item.isTriangle {
-            // Not yet focused since idle - pastel yellow circle
-            let circlePath = NSBezierPath(ovalIn: boxRect)
-            item.color.setFill()
-            circlePath.fill()
-            drawCenteredText(item.text, in: boxRect, color: textColor)
         } else {
-            // Not focused: filled circle background
+            // Not focused: circle
             let circlePath = NSBezierPath(ovalIn: boxRect)
             item.color.setFill()
             circlePath.fill()
@@ -215,23 +202,7 @@ private func contrastingTextColor(for backgroundColor: NSColor) -> NSColor {
     return luminance > 0.5 ? .black : .white
 }
 
-let enableIdleGreenFade = false
 let pastelYellow = NSColor(srgbRed: 1.0, green: 0.92, blue: 0.55, alpha: 1.0)
-
-func fadedIdleColor(since lastUpdate: Date) -> NSColor {
-    let minutesIdle = max(0, -lastUpdate.timeIntervalSinceNow / 60.0)
-    let fraction = CGFloat(min(minutesIdle / 90.0, 0.6))
-
-    guard let green = NSColor.systemGreen.usingColorSpace(.sRGB),
-          let gray = NSColor.systemGray.usingColorSpace(.sRGB) else {
-        return NSColor.systemGreen
-    }
-
-    let r = green.redComponent + fraction * (gray.redComponent - green.redComponent)
-    let g = green.greenComponent + fraction * (gray.greenComponent - green.greenComponent)
-    let b = green.blueComponent + fraction * (gray.blueComponent - green.blueComponent)
-    return NSColor(srgbRed: r, green: g, blue: b, alpha: 1.0)
-}
 
 private func nsColorForStatus(_ status: ClaudeInstance.Status) -> NSColor {
     switch status {
