@@ -25,8 +25,11 @@ The current version is optimized for a workstation setup where:
 | Status | Color | Meaning |
 |--------|-------|---------|
 | Working | Orange | Claude is processing/using tools |
-| Waiting | Yellow | Claude needs your input (question or permission prompt) |
+| Waiting | Red | Claude needs your input (question or permission prompt) |
+| Idle (new) | Yellow | Turn just completed, you haven't focused the terminal yet |
 | Idle | Green | Turn complete, ready for next prompt |
+
+Yellow automatically becomes green once you focus the terminal running that instance.
 
 # How It Works
 

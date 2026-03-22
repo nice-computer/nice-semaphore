@@ -80,7 +80,7 @@ struct InstanceRow: View {
 }
 
 /// Generates an NSImage for the menu bar showing space numbers in colored boxes
-func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spaceNumbers: [String: Int]) -> NSImage {
+func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spaceNumbers: [String: Int], focusedSinceIdle: Set<String>) -> NSImage {
     let boxSize: CGFloat = 16
     let spacing: CGFloat = 2
     let height: CGFloat = 18
@@ -104,9 +104,16 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
         items = sorted.map { instance in
             let spaceNum = spaceNumbers[instance.id]
             let text = spaceNum != nil ? "\(spaceNum!)" : "?"
+            let color: NSColor
+            if instance.status == .idle {
+                let unseen = !focusedSinceIdle.contains(instance.id) && instance.id != focusedId
+                color = unseen ? pastelYellow : NSColor.systemGreen
+            } else {
+                color = nsColorForStatus(instance.status)
+            }
             return ItemInfo(
                 text: text,
-                color: nsColorForStatus(instance.status),
+                color: color,
                 isFocused: instance.id == focusedId
             )
         }
@@ -139,7 +146,7 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
             path.fill()
             drawCenteredText(item.text, in: boxRect, color: textColor)
         } else {
-            // Not focused: circle background
+            // Not focused: circle
             let circlePath = NSBezierPath(ovalIn: boxRect)
             item.color.setFill()
             circlePath.fill()
@@ -194,6 +201,8 @@ private func contrastingTextColor(for backgroundColor: NSColor) -> NSColor {
     // Use black text for light backgrounds, white for dark
     return luminance > 0.5 ? .black : .white
 }
+
+let pastelYellow = NSColor(srgbRed: 1.0, green: 0.92, blue: 0.55, alpha: 1.0)
 
 private func nsColorForStatus(_ status: ClaudeInstance.Status) -> NSColor {
     switch status {

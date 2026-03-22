@@ -9,6 +9,7 @@ final class StatusFileMonitor: ObservableObject {
     @Published private(set) var instances: [ClaudeInstance] = []
     @Published private(set) var focusedInstanceId: String?
     @Published private(set) var spaceNumbers: [String: Int] = [:]
+    @Published private(set) var focusedSinceIdle: Set<String> = []
 
     private let statusFilePath: String
     private var fileDescriptor: Int32 = -1
@@ -111,6 +112,7 @@ final class StatusFileMonitor: ObservableObject {
     private func loadStatusFile() {
         guard FileManager.default.fileExists(atPath: statusFilePath) else {
             if !instances.isEmpty {
+                focusedSinceIdle = []
                 instances = []
             }
             return
@@ -118,6 +120,7 @@ final class StatusFileMonitor: ObservableObject {
 
         guard let data = FileManager.default.contents(atPath: statusFilePath) else {
             if !instances.isEmpty {
+                focusedSinceIdle = []
                 instances = []
             }
             return
@@ -129,11 +132,13 @@ final class StatusFileMonitor: ObservableObject {
             let statusFile = try decoder.decode(StatusFile.self, from: data)
             let newInstances = statusFile.toInstances()
             if newInstances != instances {
+                trackIdleTransitions(from: instances, to: newInstances)
                 instances = newInstances
             }
         } catch {
             // If parsing fails, reset instances
             if !instances.isEmpty {
+                focusedSinceIdle = []
                 instances = []
             }
         }
@@ -214,10 +219,45 @@ final class StatusFileMonitor: ObservableObject {
         }
     }
 
+    private func trackIdleTransitions(from oldInstances: [ClaudeInstance], to newInstances: [ClaudeInstance]) {
+        // On initial load, assume all idle instances have been seen
+        if oldInstances.isEmpty {
+            focusedSinceIdle = Set(newInstances.filter { $0.status == .idle }.map { $0.id })
+            return
+        }
+
+        let oldStatuses = Dictionary(uniqueKeysWithValues: oldInstances.map { ($0.id, $0.status) })
+        var updated = focusedSinceIdle
+
+        for instance in newInstances {
+            if instance.status != .idle {
+                updated.remove(instance.id)
+            } else if oldStatuses[instance.id] != .idle {
+                // Just became idle - not yet focused
+                updated.remove(instance.id)
+            }
+        }
+
+        // Remove gone instances
+        let currentIds = Set(newInstances.map { $0.id })
+        updated = updated.intersection(currentIds)
+
+        if updated != focusedSinceIdle {
+            focusedSinceIdle = updated
+        }
+    }
+
     private func updateFocusedInstance() {
         let newFocusedId = detectFocusedInstanceId()
         if newFocusedId != focusedInstanceId {
             focusedInstanceId = newFocusedId
+        }
+        // Mark focused idle instances as "focused since idle"
+        if let focusedId = newFocusedId,
+           let instance = instances.first(where: { $0.id == focusedId }),
+           instance.status == .idle,
+           !focusedSinceIdle.contains(focusedId) {
+            focusedSinceIdle.insert(focusedId)
         }
     }
 
