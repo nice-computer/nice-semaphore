@@ -94,7 +94,7 @@ func createMenuBarImage(for instances: [ClaudeInstance], focusedId: String?, spa
     let items: [ItemInfo]
     if instances.isEmpty {
         items = [ItemInfo(text: "–", color: NSColor.gray, isFocused: false)]
-    } else if instances.count <= 6 {
+    } else if instances.count <= 11 {
         // Sort instances by space number (ascending), unknowns at end
         let sorted = instances.sorted { a, b in
             let spaceA = spaceNumbers[a.id] ?? Int.max
