@@ -87,7 +87,7 @@ cd nice-semaphore
 swift build -c release
 ```
 
-### 2. Install the hooks plugin
+### 3. Install the hooks plugin
 
 From inside a Claude Code session, add this repo as a plugin marketplace and install:
 
@@ -98,7 +98,7 @@ From inside a Claude Code session, add this repo as a plugin marketplace and ins
 
 Claude Code manages the hooks registration — no edits to `~/.claude/settings.json` are needed.
 
-### 3. Run the app
+### 4. Run the app
 
 ```sh
 swift run -c release
@@ -109,7 +109,7 @@ To run at login, add the binary to System Settings > General > Login Items:
 .build/release/NiceSemaphore
 ```
 
-### 4. Restart Claude Code instances
+### 5. Restart Claude Code instances
 
 Because Claude Code only reloads hooks on startup, you'll need to restart any Claude Code instances you'd like tracked.
 
