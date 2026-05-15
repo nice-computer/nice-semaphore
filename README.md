@@ -87,6 +87,8 @@ cd nice-semaphore
 swift build -c release
 ```
 
+If this fails with an SDK or toolchain error, install the latest Command Line Tools update (`softwareupdate --list`) or run `sudo xcode-select --reset`.
+
 ### 3. Install the hooks plugin
 
 From inside a Claude Code session, add this repo as a plugin marketplace and install:
