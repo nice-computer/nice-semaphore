@@ -87,15 +87,18 @@ cd nice-semaphore
 swift build -c release
 ```
 
-### 2. Install the hooks
+### 3. Install the hooks plugin
 
-```sh
-./install-hooks.sh
+From inside a Claude Code session, add this repo as a plugin marketplace and install:
+
+```
+/plugin marketplace add /path/to/nice-semaphore
+/plugin install nice-semaphore@nice-semaphore
 ```
 
-This installs a hook script to `~/.claude/hooks/` and configures Claude Code to call it on session events. Your existing `~/.claude/settings.json` is backed up before modification.
+Claude Code manages the hooks registration — no edits to `~/.claude/settings.json` are needed.
 
-### 3. Run the app
+### 4. Run the app
 
 ```sh
 swift run -c release
@@ -106,7 +109,7 @@ To run at login, add the binary to System Settings > General > Login Items:
 .build/release/NiceSemaphore
 ```
 
-### 4. Restart Claude Code instances
+### 5. Restart Claude Code instances
 
 Because Claude Code only reloads hooks on startup, you'll need to restart any Claude Code instances you'd like tracked.
 
@@ -121,30 +124,18 @@ Coming soon.
 
 # Uninstallation
 
-Remove the hooks from `~/.claude/settings.json`:
+From inside a Claude Code session:
 
-```json
-{
-  "hooks": {
-    "SessionStart": [...],
-    "UserPromptSubmit": [...],
-    "PreToolUse": [...],
-    "PostToolUse": [...],
-    "Notification": [...],
-    "Stop": [...],
-    "SessionEnd": [...]
-  }
-}
+```
+/plugin uninstall nice-semaphore@nice-semaphore
+/plugin marketplace remove nice-semaphore
 ```
 
-Optionally delete:
-- `~/.claude/hooks/nice-semaphore-status.sh`
-- `~/.claude/nice-semaphore-status.json`
+Optionally delete the status file: `~/.claude/nice-semaphore-status.json`.
 
 # Roadmap
 
 * Iron out bugs
-* Install hooks as Claude Code plugin
 * macOS app image
 * Support terminals other than iTerm
 * Support remote Claude Code instances
@@ -198,19 +189,21 @@ cat ~/.claude/nice-semaphore-status.json | jq
 
 ### Test the hook script manually
 
-Simulate a hook event:
+Simulate a hook event by running the script directly from the repo:
 
 ```sh
-echo '{"session_id": "test-123", "cwd": "/tmp/test", "hook_event_name": "SessionStart"}' | ~/.claude/hooks/nice-semaphore-status.sh
+echo '{"session_id": "test-123", "cwd": "/tmp/test", "hook_event_name": "SessionStart"}' | ./hooks/nice-semaphore-status.sh
 ```
 
-### Verify hooks are installed
+### Verify the plugin is installed
 
-Check that hooks are configured in Claude Code settings:
+From inside a Claude Code session:
 
-```sh
-cat ~/.claude/settings.json | jq '.hooks'
 ```
+/plugin list
+```
+
+The `nice-semaphore` plugin should appear as installed.
 
 # Acknowledgments
 
