@@ -1,0 +1,14 @@
+{
+  "name": "nice-semaphore",
+  "description": "Marketplace for the Nice Semaphore Claude Code status hooks plugin.",
+  "owner": {
+    "name": "nice-computer"
+  },
+  "plugins": [
+    {
+      "name": "nice-semaphore",
+      "source": "./",
+      "description": "Hooks that publish Claude Code session status for the Nice Semaphore menu bar app."
+    }
+  ]
+}
