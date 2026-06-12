@@ -19,6 +19,11 @@ final class StatusFileMonitor: ObservableObject {
     private var focusTimer: Timer?
     private var cachedITermTtyScript: NSAppleScript?
 
+    // Cache for the focused iTerm TTY (AppleScript is slow, focus polls at 0.1s)
+    private var cachedFocusedTty: String?
+    private var lastFocusedTtyCheck: Date?
+    private let focusedTtyCacheInterval: TimeInterval = 0.5
+
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         self.statusFilePath = "\(home)/.claude/nice-semaphore-status.json"
@@ -266,6 +271,17 @@ final class StatusFileMonitor: ObservableObject {
             return nil
         }
 
+        // iTerm2 sessions may be hosted by the iTermServer daemon (session
+        // restoration), so instances are not descendants of the GUI app and
+        // process ancestry can't determine focus. Ask iTerm2 directly which
+        // session is focused and match by TTY.
+        if frontmostApp.bundleIdentifier == "com.googlecode.iterm2" {
+            guard let focusedTty = getCachedFocusedITermTty() else {
+                return nil
+            }
+            return instances.first { $0.tty == focusedTty }?.id
+        }
+
         let frontmostPid = Int(frontmostApp.processIdentifier)
 
         // Find all instances that are descendants of the frontmost app
@@ -350,6 +366,16 @@ final class StatusFileMonitor: ObservableObject {
         }
 
         return nil
+    }
+
+    private func getCachedFocusedITermTty() -> String? {
+        let now = Date()
+        if let last = lastFocusedTtyCheck, now.timeIntervalSince(last) < focusedTtyCacheInterval {
+            return cachedFocusedTty
+        }
+        cachedFocusedTty = getFocusedITermTty()
+        lastFocusedTtyCheck = now
+        return cachedFocusedTty
     }
 
     private func getFocusedITermTty() -> String? {
