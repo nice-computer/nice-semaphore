@@ -41,6 +41,55 @@ else
     TTY_PATH=""
 fi
 
+# Map a status to an iTerm2 tab color and write it to this instance's TTY.
+# Colors match the menu bar indicators (see README status table).
+set_tab_color() {
+    local status="$1"
+    local rgb seq
+
+    [ "${NICE_SEMAPHORE_TAB_COLORS:-1}" = "0" ] && return 0
+
+    # Tests can redirect the escape sequences to a regular file
+    local target="${NICE_SEMAPHORE_TTY_OVERRIDE:-$TTY_PATH}"
+    [ -z "$target" ] && return 0
+    [ -w "$target" ] || return 0
+
+    case "$status" in
+        working) rgb="255 149 0" ;;   # orange
+        waiting) rgb="255 59 48" ;;   # red
+        idle)    rgb="52 199 89" ;;   # green
+        default) rgb="" ;;
+        *)       return 0 ;;
+    esac
+
+    if [ -z "$rgb" ]; then
+        seq=$'\033]6;1;bg;*;default\a'
+    else
+        # shellcheck disable=SC2086
+        set -- $rgb
+        seq=$(printf '\033]6;1;bg;red;brightness;%d\a\033]6;1;bg;green;brightness;%d\a\033]6;1;bg;blue;brightness;%d\a' "$1" "$2" "$3")
+    fi
+
+    # Inside tmux the sequence must be wrapped for passthrough to the outer terminal,
+    # with every ESC doubled. Note $esc is a literal ESC byte: sed patterns do not
+    # understand \033, so the escape has to be substituted in by the shell first.
+    if [ -n "$TMUX" ]; then
+        local esc=$'\033'
+        seq=$'\033Ptmux;'$(printf '%s' "$seq" | sed "s/$esc/$esc$esc/g")$'\033\\'
+    fi
+
+    printf '%s' "$seq" > "$target" 2>/dev/null || true
+}
+
+# Re-read the status this instance actually ended up in and color the tab to match.
+# Reading back (rather than trusting the requested status) keeps the tab honest when
+# a jq update was a no-op because the instance did not exist.
+sync_tab_color() {
+    local current
+    current=$(/usr/bin/jq -r --arg sid "$SESSION_ID" '.instances[$sid].status // empty' "$STATUS_FILE" 2>/dev/null)
+    [ -n "$current" ] && set_tab_color "$current"
+}
+
 # Function to safely update the status file with locking
 update_status_file() {
     local action="$1"
@@ -121,6 +170,13 @@ update_status_file() {
     # Release lock
     rmdir "$LOCK_FILE" 2>/dev/null
     trap - EXIT
+
+    # Reflect the new state in the iTerm2 tab color
+    if [ "$action" = "remove" ]; then
+        set_tab_color "default"
+    else
+        sync_tab_color
+    fi
 }
 
 # Handle different hook events

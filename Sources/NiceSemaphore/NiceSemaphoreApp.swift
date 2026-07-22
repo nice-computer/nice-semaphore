@@ -61,14 +61,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             for instance in sorted {
                 let spaceLabel = spaceNumbers[instance.id].map { "[\($0)] " } ?? ""
                 let title = "\(spaceLabel)\(instance.displayPath)"
-                let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                let item = NSMenuItem(title: title, action: #selector(activateInstance(_:)), keyEquivalent: "")
                 let unseen = instance.status == .idle && !focusedSinceIdle.contains(instance.id) && instance.id != focusedId
                 let iconColor = unseen ? pastelYellow : nsColorForStatus(instance.status)
                 item.image = createMenuItemIcon(
                     color: iconColor,
                     isFocused: instance.id == focusedId
                 )
-                item.isEnabled = false
+                // Clicking jumps to the terminal session; only possible if we know its TTY
+                if let tty = instance.tty, !tty.isEmpty {
+                    item.target = self
+                    item.representedObject = tty
+                    item.toolTip = "Switch to this session (\(tty))"
+                } else {
+                    item.isEnabled = false
+                }
                 menu.addItem(item)
             }
         }
@@ -114,6 +121,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return NSColor.systemRed
         case .idle:
             return NSColor.systemGreen
+        }
+    }
+
+    @objc private func activateInstance(_ sender: NSMenuItem) {
+        guard let tty = sender.representedObject as? String else { return }
+        TerminalActivator.activate(tty: tty) { succeeded in
+            if !succeeded {
+                NSSound.beep()
+            }
         }
     }
 
