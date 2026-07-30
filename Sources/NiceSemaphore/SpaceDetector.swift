@@ -10,8 +10,30 @@ enum SpaceDetector {
     private static let cacheInterval: TimeInterval = 1.0  // Refresh at most every 1 second
     private static var cachedWindowTtyScript: NSAppleScript?
 
+    // Cache the full result too — the CGS space lookups don't need to run at
+    // the 0.1s focus-poll rate
+    private static var cachedSpaceNumbers: [String: Int] = [:]
+    private static var lastSpaceNumbersTime: Date?
+    private static var lastSpaceNumbersInstanceIds: Set<String> = []
+
     /// Get space numbers for Claude instances by matching their TTYs to iTerm2 windows
     static func getSpaceNumbers(for instances: [ClaudeInstance]) -> [String: Int] {
+        let now = Date()
+        let instanceIds = Set(instances.map { $0.id })
+        if let last = lastSpaceNumbersTime,
+           now.timeIntervalSince(last) < cacheInterval,
+           instanceIds == lastSpaceNumbersInstanceIds {
+            return cachedSpaceNumbers
+        }
+
+        let result = computeSpaceNumbers(for: instances)
+        cachedSpaceNumbers = result
+        lastSpaceNumbersTime = now
+        lastSpaceNumbersInstanceIds = instanceIds
+        return result
+    }
+
+    private static func computeSpaceNumbers(for instances: [ClaudeInstance]) -> [String: Int] {
         var result: [String: Int] = [:]
 
         // Check if CGS APIs are available
@@ -120,7 +142,7 @@ enum SpaceDetector {
     private static func getSpaceIdToIndexMap() -> [Int: Int]? {
         guard let conn = CGSFunctions.getConnection(),
               let copySpacesFn = CGSFunctions.copyManagedDisplaySpaces,
-              let displaySpaces = copySpacesFn(conn) as? [[String: Any]],
+              let displaySpaces = copySpacesFn(conn)?.takeRetainedValue() as? [[String: Any]],
               let firstDisplay = displaySpaces.first,
               let spaces = firstDisplay["Spaces"] as? [[String: Any]] else {
             return nil
@@ -143,7 +165,7 @@ enum SpaceDetector {
         }
 
         let windowIds = [windowId] as CFArray
-        guard let spaceIds = copySpacesForWindowsFn(conn, 0x7, windowIds) as? [Int],
+        guard let spaceIds = copySpacesForWindowsFn(conn, 0x7, windowIds)?.takeRetainedValue() as? [Int],
               let spaceId = spaceIds.first else {
             return nil
         }
@@ -164,14 +186,16 @@ private enum CGSFunctions {
         return unsafeBitCast(sym, to: (@convention(c) () -> CGSConnectionID).self)
     }()
 
-    static let copyManagedDisplaySpaces: (@convention(c) (CGSConnectionID) -> CFArray?)? = {
+    // These follow the CF "Copy rule" (+1 return); type them as Unmanaged and
+    // takeRetainedValue() at call sites, or every call leaks the returned array.
+    static let copyManagedDisplaySpaces: (@convention(c) (CGSConnectionID) -> Unmanaged<CFArray>?)? = {
         guard let handle = handle, let sym = dlsym(handle, "CGSCopyManagedDisplaySpaces") else { return nil }
-        return unsafeBitCast(sym, to: (@convention(c) (CGSConnectionID) -> CFArray?).self)
+        return unsafeBitCast(sym, to: (@convention(c) (CGSConnectionID) -> Unmanaged<CFArray>?).self)
     }()
 
-    static let copySpacesForWindows: (@convention(c) (CGSConnectionID, Int, CFArray) -> CFArray?)? = {
+    static let copySpacesForWindows: (@convention(c) (CGSConnectionID, Int, CFArray) -> Unmanaged<CFArray>?)? = {
         guard let handle = handle, let sym = dlsym(handle, "CGSCopySpacesForWindows") else { return nil }
-        return unsafeBitCast(sym, to: (@convention(c) (CGSConnectionID, Int, CFArray) -> CFArray?).self)
+        return unsafeBitCast(sym, to: (@convention(c) (CGSConnectionID, Int, CFArray) -> Unmanaged<CFArray>?).self)
     }()
 
     static var isAvailable: Bool {
