@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import NiceSemaphoreSessions
 
 @main
 struct NiceSemaphoreApp: App {
@@ -36,6 +37,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 .store(in: &cancellables)
 
             monitor.startMonitoring()
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            monitor?.shutdown()
         }
     }
 

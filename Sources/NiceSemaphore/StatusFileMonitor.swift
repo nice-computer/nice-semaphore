@@ -2,8 +2,11 @@ import Foundation
 import Combine
 import AppKit
 import CoreGraphics
+import NiceSemaphoreSessions
+import NiceSemaphoreSpaces
 
-/// Monitors the Claude instance status file for changes using DispatchSource
+/// Monitors the sessions state file for changes using DispatchSource and keeps the
+/// session → Space tracker up to date
 @MainActor
 final class StatusFileMonitor: ObservableObject {
     @Published private(set) var instances: [ClaudeInstance] = []
@@ -11,10 +14,11 @@ final class StatusFileMonitor: ObservableObject {
     @Published private(set) var spaceNumbers: [String: Int] = [:]
     @Published private(set) var focusedSinceIdle: Set<String> = []
 
+    private let sessionStore: SessionStore
+    private let spaceTracker: SpaceTracker
     private let statusFilePath: String
     private var fileDescriptor: Int32 = -1
     private var dispatchSource: DispatchSourceFileSystemObject?
-    private var lastModificationDate: Date?
     private var cleanupTimer: Timer?
     private var focusTimer: Timer?
     private var cachedITermTtyScript: NSAppleScript?
@@ -24,23 +28,20 @@ final class StatusFileMonitor: ObservableObject {
     private var lastFocusedTtyCheck: Date?
     private let focusedTtyCacheInterval: TimeInterval = 0.5
 
-    init() {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        self.statusFilePath = "\(home)/.claude/nice-semaphore-status.json"
+    init(paths: SemaphorePaths = .resolve()) {
+        self.sessionStore = SessionStore(paths: paths)
+        self.spaceTracker = SpaceTracker(paths: paths, locator: WindowSpaceLocator.system())
+        self.statusFilePath = paths.sessionsState.path
     }
 
     func startMonitoring() {
+        // Create the state file if it doesn't exist, and pick up sessions from the pre-0.2 location
+        sessionStore.prepare()
+        sessionStore.importLegacyStatusFile(at: SemaphorePaths.legacyStatusFile())
+        spaceTracker.start()
+
         // Initial load
         loadStatusFile()
-
-        // Ensure the directory exists
-        let directory = (statusFilePath as NSString).deletingLastPathComponent
-        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-
-        // Create the file if it doesn't exist
-        if !FileManager.default.fileExists(atPath: statusFilePath) {
-            try? "{\"instances\":{}}".write(toFile: statusFilePath, atomically: true, encoding: .utf8)
-        }
 
         // Start watching the file
         startWatchingFile()
@@ -50,6 +51,12 @@ final class StatusFileMonitor: ObservableObject {
 
         // Start focus detection
         startFocusTimer()
+    }
+
+    /// Stops monitoring for good (app quit), recording that Spaces are no longer tracked.
+    func shutdown() {
+        stopMonitoring()
+        spaceTracker.stop()
     }
 
     func stopMonitoring() {
@@ -115,7 +122,8 @@ final class StatusFileMonitor: ObservableObject {
     }
 
     private func loadStatusFile() {
-        guard FileManager.default.fileExists(atPath: statusFilePath) else {
+        guard let newInstances = sessionStore.loadSessions() else {
+            // Missing or unreadable state file, reset instances
             if !instances.isEmpty {
                 focusedSinceIdle = []
                 instances = []
@@ -123,29 +131,9 @@ final class StatusFileMonitor: ObservableObject {
             return
         }
 
-        guard let data = FileManager.default.contents(atPath: statusFilePath) else {
-            if !instances.isEmpty {
-                focusedSinceIdle = []
-                instances = []
-            }
-            return
-        }
-
-        do {
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let statusFile = try decoder.decode(StatusFile.self, from: data)
-            let newInstances = statusFile.toInstances()
-            if newInstances != instances {
-                trackIdleTransitions(from: instances, to: newInstances)
-                instances = newInstances
-            }
-        } catch {
-            // If parsing fails, reset instances
-            if !instances.isEmpty {
-                focusedSinceIdle = []
-                instances = []
-            }
+        if newInstances != instances {
+            trackIdleTransitions(from: instances, to: newInstances)
+            instances = newInstances
         }
     }
 
@@ -158,47 +146,9 @@ final class StatusFileMonitor: ObservableObject {
     }
 
     private func cleanupDeadProcesses() {
-        let deadInstances = instances.filter { instance in
-            guard let pid = instance.pid else { return false }
-            return !isProcessAlive(pid: pid)
-        }
-
-        guard !deadInstances.isEmpty else { return }
-
-        // Remove dead instances from the status file
-        for instance in deadInstances {
-            removeInstanceFromFile(sessionId: instance.id)
-        }
-    }
-
-    private func isProcessAlive(pid: Int) -> Bool {
-        // kill with signal 0 checks if process exists without sending a signal
-        return kill(Int32(pid), 0) == 0
-    }
-
-    private func removeInstanceFromFile(sessionId: String) {
-        guard FileManager.default.fileExists(atPath: statusFilePath),
-              let data = FileManager.default.contents(atPath: statusFilePath) else {
-            return
-        }
-
-        do {
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            var statusFile = try decoder.decode(StatusFile.self, from: data)
-            statusFile.instances.removeValue(forKey: sessionId)
-
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            encoder.outputFormatting = .prettyPrinted
-            let newData = try encoder.encode(statusFile)
-            try newData.write(to: URL(fileURLWithPath: statusFilePath))
-
-            // Force reload
-            lastModificationDate = nil
+        // Remove sessions whose process died without a SessionEnd event
+        if !sessionStore.reapDeadSessions().isEmpty {
             loadStatusFile()
-        } catch {
-            // Ignore errors
         }
     }
 
@@ -218,7 +168,8 @@ final class StatusFileMonitor: ObservableObject {
     }
 
     private func updateSpaceNumbers() {
-        let newSpaceNumbers = SpaceDetector.getSpaceNumbers(for: instances)
+        spaceTracker.update(sessions: instances)
+        let newSpaceNumbers = spaceTracker.assignments.mapValues(\.spaceIndex)
         if newSpaceNumbers != spaceNumbers {
             spaceNumbers = newSpaceNumbers
         }

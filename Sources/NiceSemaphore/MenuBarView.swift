@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import NiceSemaphoreSessions
 
 /// The dropdown menu content shown when clicking the menu bar item
 struct MenuBarView: View {

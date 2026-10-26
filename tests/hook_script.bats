@@ -5,12 +5,9 @@
 setup() {
     # Create temp directory for test isolation
     export TEST_DIR="$(mktemp -d)"
-    export NICE_SEMAPHORE_STATUS_FILE="$TEST_DIR/status.json"
-    export NICE_SEMAPHORE_LOCK_FILE="$TEST_DIR/status.lock"
-    export NICE_SEMAPHORE_LOG_FILE="$TEST_DIR/hook.log"
-
-    # Initialize empty status file
-    echo '{"instances":{}}' > "$NICE_SEMAPHORE_STATUS_FILE"
+    export NICE_SEMAPHORE_HOME="$TEST_DIR"
+    export STATE_FILE="$TEST_DIR/sessions/state.json"
+    export EVENT_LOG="$TEST_DIR/sessions/log.jsonl"
 
     # Path to hook script
     export HOOK_SCRIPT="$BATS_TEST_DIRNAME/../hooks/nice-semaphore-status.sh"
@@ -27,12 +24,12 @@ run_hook() {
 
 # Helper to get status for a session
 get_status() {
-    jq -r ".instances[\"$1\"].status // empty" "$NICE_SEMAPHORE_STATUS_FILE"
+    jq -r ".sessions[\"$1\"].status // empty" "$STATE_FILE"
 }
 
 # Helper to check if session exists
 session_exists() {
-    jq -e ".instances[\"$1\"]" "$NICE_SEMAPHORE_STATUS_FILE" > /dev/null 2>&1
+    jq -e ".sessions[\"$1\"]" "$STATE_FILE" > /dev/null 2>&1
 }
 
 # =============================================================================
@@ -48,7 +45,7 @@ session_exists() {
 @test "SessionStart: stores project path" {
     run_hook '{"session_id":"test-session","cwd":"/tmp/my-project","hook_event_name":"SessionStart"}'
 
-    run jq -r '.instances["test-session"].project' "$NICE_SEMAPHORE_STATUS_FILE"
+    run jq -r '.sessions["test-session"].project' "$STATE_FILE"
     [ "$output" = "/tmp/my-project" ]
 }
 
@@ -74,14 +71,14 @@ session_exists() {
     run_hook '{"session_id":"test-session","cwd":"/tmp/project","hook_event_name":"PreToolUse","tool_name":"AskUserQuestion"}'
 
     # Verify pending is set
-    run jq -r '.instances["test-session"].pendingQuestion' "$NICE_SEMAPHORE_STATUS_FILE"
+    run jq -r '.sessions["test-session"].pendingQuestion' "$STATE_FILE"
     [ "$output" = "true" ]
 
     # Action: submit a prompt
     run_hook '{"session_id":"test-session","cwd":"/tmp/project","hook_event_name":"UserPromptSubmit"}'
 
     # Assert: pendingQuestion is cleared
-    run jq -r '.instances["test-session"].pendingQuestion' "$NICE_SEMAPHORE_STATUS_FILE"
+    run jq -r '.sessions["test-session"].pendingQuestion' "$STATE_FILE"
     [ "$output" = "false" ]
 }
 
@@ -173,12 +170,12 @@ session_exists() {
     run_hook '{"session_id":"test-session","cwd":"/tmp/project","hook_event_name":"SessionStart"}'
     run_hook '{"session_id":"test-session","cwd":"/tmp/project","hook_event_name":"PreToolUse","tool_name":"AskUserQuestion"}'
 
-    run jq -r '.instances["test-session"].pendingQuestion' "$NICE_SEMAPHORE_STATUS_FILE"
+    run jq -r '.sessions["test-session"].pendingQuestion' "$STATE_FILE"
     [ "$output" = "true" ]
 
     run_hook '{"session_id":"test-session","cwd":"/tmp/project","hook_event_name":"Stop"}'
 
-    run jq -r '.instances["test-session"].pendingQuestion' "$NICE_SEMAPHORE_STATUS_FILE"
+    run jq -r '.sessions["test-session"].pendingQuestion' "$STATE_FILE"
     [ "$output" = "false" ]
 }
 
@@ -270,6 +267,117 @@ session_exists() {
 #     [ "$(get_status s2)" = "idle" ]
 #     ...
 # }
+
+# =============================================================================
+# State file location and format
+# =============================================================================
+
+@test "State: creates sessions directory and versioned state file" {
+    rm -rf "$TEST_DIR/sessions"
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"SessionStart"}'
+
+    run jq -r '.v' "$STATE_FILE"
+    [ "$output" = "1" ]
+    [ "$(get_status s1)" = "idle" ]
+}
+
+@test "State: corrupt state file is reset" {
+    mkdir -p "$TEST_DIR/sessions"
+    echo 'not json' > "$STATE_FILE"
+
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"SessionStart"}'
+
+    [ "$(get_status s1)" = "idle" ]
+}
+
+@test "State: lock is released after each event" {
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"SessionStart"}'
+
+    [ ! -d "$TEST_DIR/sessions/.lock" ]
+}
+
+@test "State: unknown fields on a session are preserved" {
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"SessionStart"}'
+    jq '.sessions.s1.extra = "keep"' "$STATE_FILE" > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"UserPromptSubmit"}'
+
+    run jq -r '.sessions.s1.extra' "$STATE_FILE"
+    [ "$output" = "keep" ]
+}
+
+@test "State: event for an untracked session adds it with pid and tty fields" {
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"UserPromptSubmit"}'
+
+    [ "$(get_status s1)" = "working" ]
+    run jq -r '.sessions.s1 | has("pid") and has("tty") and has("terminalPid")' "$STATE_FILE"
+    [ "$output" = "true" ]
+}
+
+@test "State: SessionEnd for an untracked session does not add it" {
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"SessionEnd"}'
+
+    ! session_exists "s1"
+}
+
+# =============================================================================
+# Event log
+# =============================================================================
+
+log_events() {
+    jq -r '.event' "$EVENT_LOG" | paste -sd, -
+}
+
+@test "Log: records lifecycle events with status transitions" {
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"SessionStart"}'
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"UserPromptSubmit"}'
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"Stop"}'
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"SessionEnd"}'
+
+    [ "$(log_events)" = "SessionStart,UserPromptSubmit,Stop,SessionEnd" ]
+
+    run jq -c '[.prevStatus, .status]' "$EVENT_LOG"
+    [ "${lines[0]}" = '[null,"idle"]' ]
+    [ "${lines[1]}" = '["idle","working"]' ]
+    [ "${lines[2]}" = '["working","idle"]' ]
+    [ "${lines[3]}" = '["idle",null]' ]
+}
+
+@test "Log: records have the v1 schema" {
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"SessionStart"}'
+
+    run jq -c '{v, sessionId, event, cwd, hasTs: (.ts | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$")), pidIsNumber: (.pid | type == "number")}' "$EVENT_LOG"
+    [ "$output" = '{"v":1,"sessionId":"s1","event":"SessionStart","cwd":"/tmp/project","hasTs":true,"pidIsNumber":true}' ]
+}
+
+@test "Log: tool events are only logged when the status changes" {
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"SessionStart"}'
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"UserPromptSubmit"}'
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"PreToolUse","tool_name":"Read"}'
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"PostToolUse","tool_name":"Read"}'
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"PreToolUse","tool_name":"AskUserQuestion"}'
+
+    [ "$(log_events)" = "SessionStart,UserPromptSubmit,PreToolUse" ]
+    run jq -r 'select(.event == "PreToolUse") | .tool' "$EVENT_LOG"
+    [ "$output" = "AskUserQuestion" ]
+}
+
+@test "Log: rotates when the log exceeds the size limit" {
+    export NICE_SEMAPHORE_LOG_MAX_BYTES=1
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"SessionStart"}'
+    run_hook '{"session_id":"s1","cwd":"/tmp/project","hook_event_name":"UserPromptSubmit"}'
+
+    [ "$(wc -l < "$EVENT_LOG" | tr -d ' ')" = "1" ]
+    [ "$(log_events)" = "UserPromptSubmit" ]
+    run bash -c "ls '$TEST_DIR/sessions' | grep -c '^log-.*\.jsonl$'"
+    [ "$output" = "1" ]
+}
+
+@test "Log: invalid input writes nothing" {
+    echo 'not json' | "$HOOK_SCRIPT"
+
+    [ ! -e "$EVENT_LOG" ]
+}
 
 # =============================================================================
 # Known issues / Expected failures
